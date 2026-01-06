@@ -1,0 +1,8 @@
+{
+  "name": "Zongo",
+  "description": "A premium dating experience featuring AI-powered video dates and live streaming with a token-based monetization system.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

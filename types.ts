@@ -12,6 +12,7 @@ export interface User {
   isOnline: boolean; // Online status for filtering
   album: string[];
   earnings?: number; // Total earnings from gifts
+  viewerCount?: number; // Number of viewers for live stream
 }
 
 export interface Message {
@@ -30,7 +31,8 @@ export enum View {
   HOST_LIVE = 'host_live', // Added for hosting own stream
   PROFILE = 'profile',
   TOKEN_SHOP = 'token_shop',
-  USER_DETAIL = 'user_detail'
+  USER_DETAIL = 'user_detail',
+  HOME = 'home',
 }
 
 export interface AppState {

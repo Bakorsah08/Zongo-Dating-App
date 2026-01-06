@@ -13,6 +13,7 @@ export const MOCK_USERS: User[] = [
     distance: 2,
     isOnline: true,
     isLive: true,
+    viewerCount: 1234,
     album: [
       'https://picsum.photos/seed/sarah1/400/400',
       'https://picsum.photos/seed/sarah2/400/400',
@@ -48,6 +49,7 @@ export const MOCK_USERS: User[] = [
     distance: 1,
     isOnline: true,
     isLive: true,
+    viewerCount: 876,
     album: [
       'https://picsum.photos/seed/chloe1/400/400',
       'https://picsum.photos/seed/chloe2/400/400',
@@ -99,6 +101,7 @@ export const MOCK_USERS: User[] = [
     distance: 20,
     isOnline: true,
     isLive: true,
+    viewerCount: 2500,
     album: [
       'https://picsum.photos/seed/jasmine1/400/400'
     ],
@@ -139,7 +142,7 @@ export const TOKEN_PACKAGES: TokenPackage[] = [
 ];
 
 export const TOKEN_COSTS = {
-  VIDEO_CALL: 50,
+  VIDEO_CALL_PER_INTERVAL: 5,
   LIVE_STREAM: 10
 };
 

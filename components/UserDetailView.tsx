@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 
@@ -70,7 +69,13 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
               onClick={() => onLive(user)}
               className="bg-white text-black py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              📺 Watch Live
+              <span>📺 Watch Live</span>
+              {user.viewerCount && (
+                <span className="flex items-center gap-1 text-xs bg-black/10 px-2 py-1 rounded-full">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  {user.viewerCount.toLocaleString()}
+                </span>
+              )}
             </button>
           ) : (
             <button 

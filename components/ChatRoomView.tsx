@@ -67,11 +67,13 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({ partner, onBack, onVideoCal
         </div>
         <button 
           onClick={onVideoCall}
-          className="bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-pink-900/20 active:scale-95"
+          className="bg-pink-600 hover:bg-pink-500 text-white p-2 pr-3 rounded-full flex items-center gap-2 transition-all shadow-lg shadow-pink-900/20 active:scale-95"
         >
-          <span>📹</span> 
-          <span>Video Call</span>
-          <span className="bg-black/20 px-1.5 rounded text-[10px]">{TOKEN_COSTS.VIDEO_CALL}</span>
+          <span className="text-lg">📹</span>
+          <div className="text-left">
+            <span className="font-bold text-xs block leading-tight">Video Call</span>
+            <span className="text-[9px] text-pink-200 block leading-tight">💎 {TOKEN_COSTS.VIDEO_CALL_PER_INTERVAL} / 10s</span>
+          </div>
         </button>
       </div>
 

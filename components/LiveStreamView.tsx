@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { TOKEN_COSTS, GIFTS } from '../constants';
 import { User, Gift } from '../types';
@@ -20,7 +19,7 @@ interface LiveStreamViewProps {
 
 const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductTokens, isHost, onReceiveGift }) => {
   const [hasJoined, setHasJoined] = useState(isHost || false);
-  const [viewerCount, setViewerCount] = useState(isHost ? 0 : Math.floor(Math.random() * 500) + 100);
+  const [viewerCount, setViewerCount] = useState(isHost ? 0 : (host.viewerCount || Math.floor(Math.random() * 500) + 100));
   const [likeCount, setLikeCount] = useState(isHost ? 0 : Math.floor(Math.random() * 2000) + 500);
   const [hostEarnings, setHostEarnings] = useState(host.earnings || 0);
   const [comments, setComments] = useState<{user: string, text: string, isGift?: boolean}[]>([]);
@@ -134,12 +133,18 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
             src={host.avatar} 
             className="w-full h-full object-cover blur-xl opacity-30"
           />
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 p-8">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8">
             <div className="relative">
                 <img src={host.avatar} className="w-24 h-24 rounded-full border-4 border-pink-500 shadow-2xl" />
                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-red-600 px-3 py-0.5 rounded text-[10px] font-black">LIVE</div>
             </div>
-            <h2 className="text-2xl font-bold">Watch {host.name}'s Stream</h2>
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold">Watch {host.name}'s Stream</h2>
+              <div className="flex items-center justify-center gap-1.5 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg border border-white/10 w-fit mx-auto">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <span>{viewerCount.toLocaleString()} watching</span>
+              </div>
+            </div>
             <p className="text-zinc-400 text-sm">Join {host.name}'s interactive AI date stream! Chat with her and other viewers.</p>
             <div className="bg-zinc-800/80 backdrop-blur-md p-4 rounded-2xl w-full border border-white/5">
                <div className="flex justify-between items-center mb-3">

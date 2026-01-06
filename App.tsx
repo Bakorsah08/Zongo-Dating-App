@@ -11,6 +11,7 @@ import TokenShopView from './components/TokenShopView';
 import Navbar from './components/Navbar';
 import ProfileView from './components/ProfileView';
 import UserDetailView from './components/UserDetailView';
+import HomeMenuView from './components/HomeMenuView';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -28,15 +29,29 @@ const App: React.FC = () => {
         'https://picsum.photos/seed/me1/400/400',
         'https://picsum.photos/seed/me2/400/400'
       ],
-      earnings: 0
+      earnings: 345
     },
     tokens: 250,
     matches: [MOCK_USERS[0], MOCK_USERS[1]],
     currentView: View.EXPLORE,
   });
+  const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
 
   const setView = (view: View) => {
-    setState(prev => ({ ...prev, currentView: view }));
+    if (view === View.HOME) {
+      setIsHomeMenuOpen(true);
+    } else {
+      setIsHomeMenuOpen(false); // Always close menu when navigating
+      setState(prev => ({ ...prev, currentView: view }));
+    }
+  };
+  
+  const handleMenuAction = (viewToGo: View) => {
+    setIsHomeMenuOpen(false);
+    // Use a slight delay to allow the menu to animate out before view changes
+    setTimeout(() => {
+      setState(prev => ({ ...prev, currentView: viewToGo }));
+    }, 200);
   };
 
   const openUserDetail = (user: User) => {
@@ -84,7 +99,7 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (state.currentView) {
       case View.EXPLORE:
-        return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} onGoLive={() => setView(View.HOST_LIVE)} />;
+        return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} />;
       case View.CHATS:
         return <ChatListView matches={state.matches} onChatSelect={openChat} />;
       case View.CHAT_ROOM:
@@ -102,6 +117,7 @@ const App: React.FC = () => {
             partner={state.selectedChatPartner} 
             onEnd={() => setView(View.CHAT_ROOM)} 
             deductTokens={deductTokens}
+            tokens={state.tokens}
           />
         ) : null;
       case View.LIVE_STREAM:
@@ -122,7 +138,7 @@ const App: React.FC = () => {
           />
         ) : null;
       default:
-        return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} onGoLive={() => setView(View.HOST_LIVE)} />;
+        return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} />;
     }
   };
 
@@ -135,6 +151,15 @@ const App: React.FC = () => {
       {![View.VIDEO_CALL, View.LIVE_STREAM, View.HOST_LIVE, View.USER_DETAIL].includes(state.currentView) && (
         <Navbar currentView={state.currentView} setView={setView} tokenCount={state.tokens} />
       )}
+
+      <HomeMenuView
+        isOpen={isHomeMenuOpen}
+        onClose={() => setIsHomeMenuOpen(false)}
+        user={state.currentUser}
+        onGoLive={() => handleMenuAction(View.HOST_LIVE)}
+        onGoShop={() => handleMenuAction(View.TOKEN_SHOP)}
+        onGoProfile={() => handleMenuAction(View.PROFILE)}
+      />
     </div>
   );
 };

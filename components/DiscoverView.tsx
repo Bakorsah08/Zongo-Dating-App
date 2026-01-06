@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { MOCK_USERS } from '../constants';
 import { User } from '../types';
@@ -6,10 +5,9 @@ import { User } from '../types';
 interface DiscoverViewProps {
   onSelectUser: (user: User) => void;
   onSelectLive: (user: User) => void;
-  onGoLive?: () => void;
 }
 
-const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive, onGoLive }) => {
+const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterOnline, setFilterOnline] = useState<'all' | 'online'>('all');
   const [maxDistance, setMaxDistance] = useState(50);
@@ -132,9 +130,17 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive,
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
               
               {user.isLive && (
-                <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter text-white shadow-lg animate-pulse">
-                  <span className="w-1 h-1 bg-white rounded-full"></span>
-                  LIVE
+                <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 bg-red-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter text-white shadow-lg animate-pulse">
+                    <span className="w-1 h-1 bg-white rounded-full"></span>
+                    LIVE
+                  </div>
+                  {user.viewerCount && (
+                     <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] font-bold text-white shadow-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        <span>{user.viewerCount.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -163,16 +169,6 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive,
           </div>
         )}
       </div>
-
-      {/* FLOATING GO LIVE BUTTON */}
-      <button 
-        onClick={onGoLive}
-        className="fixed bottom-24 right-6 w-16 h-16 rounded-full bg-red-600 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)] active:scale-90 transition-all border-4 border-black z-40 group"
-      >
-        <div className="absolute -inset-1 rounded-full bg-red-600/20 animate-ping group-hover:hidden"></div>
-        <span className="text-2xl">📹</span>
-        <span className="text-[8px] font-black tracking-tighter mt-0.5 uppercase">Go Live</span>
-      </button>
     </div>
   );
 };

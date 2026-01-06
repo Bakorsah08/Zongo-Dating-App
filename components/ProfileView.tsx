@@ -7,13 +7,15 @@ interface ProfileViewProps {
   tokens: number;
   onGoShop: () => void;
   onUpdateAlbum: (newAlbum: string[]) => void;
+  onUpdateAvatar: (newAvatarUrl: string) => void;
 }
 
 const MAX_PHOTOS = 8;
 
-const ProfileView: React.FC<ProfileViewProps> = ({ user, tokens, onGoShop, onUpdateAlbum }) => {
+const ProfileView: React.FC<ProfileViewProps> = ({ user, tokens, onGoShop, onUpdateAlbum, onUpdateAvatar }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  const [isPhotoSelectorOpen, setIsPhotoSelectorOpen] = useState(false);
 
   const handleUploadClick = () => {
     if (user.album.length >= MAX_PHOTOS) return;
@@ -47,6 +49,11 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, tokens, onGoShop, onUpd
       setViewingIndex((viewingIndex - 1 + user.album.length) % user.album.length);
     }
   };
+  
+  const handleSelectPhoto = (photoUrl: string) => {
+    onUpdateAvatar(photoUrl);
+    setIsPhotoSelectorOpen(false);
+  };
 
   const isLimitReached = user.album.length >= MAX_PHOTOS;
 
@@ -55,7 +62,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, tokens, onGoShop, onUpd
       <div className="flex flex-col items-center gap-4 mb-8">
         <div className="relative">
           <img src={user.avatar} className="w-32 h-32 rounded-full border-4 border-zinc-800 shadow-2xl object-cover" />
-          <button className="absolute bottom-0 right-0 bg-pink-500 w-10 h-10 rounded-full flex items-center justify-center border-4 border-black text-white text-xl shadow-lg">
+          <button 
+            onClick={() => setIsPhotoSelectorOpen(true)}
+            className="absolute bottom-0 right-0 bg-pink-500 w-10 h-10 rounded-full flex items-center justify-center border-4 border-black text-white text-xl shadow-lg active:scale-90 transition-transform"
+          >
             ✎
           </button>
         </div>
@@ -148,6 +158,45 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, tokens, onGoShop, onUpd
           Log Out
         </button>
       </div>
+      
+      {/* Album Photo Selector Modal */}
+      {isPhotoSelectorOpen && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-200"
+          onClick={() => setIsPhotoSelectorOpen(false)}
+        >
+          <div 
+              className="w-full max-w-md bg-zinc-950 border-t border-zinc-800 rounded-t-[32px] p-6 pb-12 relative animate-in slide-in-from-bottom duration-300"
+              onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6"></div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 text-center mb-6">Select New Profile Photo</h3>
+            {user.album.length > 0 ? (
+              <div className="grid grid-cols-3 gap-3 max-h-[40vh] overflow-y-auto">
+                {user.album.map((img, idx) => (
+                  <div 
+                    key={idx} 
+                    onClick={() => handleSelectPhoto(img)}
+                    className="aspect-square rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 cursor-pointer active:scale-95 transition-transform hover:border-pink-500"
+                  >
+                    <img src={img} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-zinc-500 text-sm py-8">
+                You have no photos in your album. Add some photos first!
+              </p>
+            )}
+            <button 
+              onClick={() => setIsPhotoSelectorOpen(false)}
+              className="w-full mt-6 bg-zinc-800 py-3 rounded-xl font-bold text-white active:scale-95 transition-transform"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Full Screen Image Viewer */}
       {viewingIndex !== null && (

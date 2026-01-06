@@ -8,21 +8,22 @@ interface HomeMenuViewProps {
   onGoLive: () => void;
   onGoShop: () => void;
   onGoProfile: () => void;
+  onGoCashOut: () => void;
 }
 
-const HomeMenuView: React.FC<HomeMenuViewProps> = ({ isOpen, onClose, user, onGoLive, onGoShop, onGoProfile }) => {
+const HomeMenuView: React.FC<HomeMenuViewProps> = ({ isOpen, onClose, user, onGoLive, onGoShop, onGoProfile, onGoCashOut }) => {
   if (!isOpen) return null;
 
   return (
     <>
       {/* Backdrop covers content area, but not navbar */}
       <div 
-        className="fixed top-0 bottom-20 left-0 right-0 max-w-md mx-auto z-40 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+        className="fixed top-0 bottom-24 left-0 right-0 max-w-md mx-auto z-40 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
         onClick={onClose}
       />
       {/* Menu sheet sits above navbar */}
       <div 
-        className="fixed bottom-20 left-0 right-0 max-w-md mx-auto bg-zinc-950 border-t border-zinc-800 rounded-t-[32px] p-6 pb-8 z-50 animate-in slide-in-from-bottom duration-300"
+        className="fixed bottom-24 left-0 right-0 max-w-md mx-auto bg-zinc-950 border-t border-zinc-800 rounded-t-[32px] p-6 pb-8 z-50 animate-in slide-in-from-bottom duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6"></div>
@@ -40,8 +41,11 @@ const HomeMenuView: React.FC<HomeMenuViewProps> = ({ isOpen, onClose, user, onGo
         <div className="bg-gradient-to-br from-pink-500/10 to-transparent border border-pink-500/20 rounded-2xl p-5 mb-8">
             <p className="text-xs font-bold uppercase tracking-widest text-pink-400/80 mb-2">My Earnings</p>
             <div className="flex items-end justify-between">
-                <span className="text-4xl font-black text-white">${(user.earnings || 0).toLocaleString()}</span>
-                <button className="text-xs font-bold text-white bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-colors">
+                <span className="text-4xl font-black text-white">${((user.earnings || 0) / 100).toFixed(2)}</span>
+                <button 
+                  onClick={onGoCashOut}
+                  className="text-xs font-bold text-white bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-colors"
+                >
                     Cash Out
                 </button>
             </div>

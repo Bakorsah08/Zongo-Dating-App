@@ -12,6 +12,7 @@ import Navbar from './components/Navbar';
 import ProfileView from './components/ProfileView';
 import UserDetailView from './components/UserDetailView';
 import HomeMenuView from './components/HomeMenuView';
+import CashOutView from './components/CashOutView';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -75,6 +76,13 @@ const App: React.FC = () => {
       currentUser: { ...prev.currentUser, album: newAlbum }
     }));
   };
+  
+  const handleUpdateAvatar = (newAvatarUrl: string) => {
+    setState(prev => ({
+      ...prev,
+      currentUser: { ...prev.currentUser, avatar: newAvatarUrl }
+    }));
+  };
 
   const deductTokens = (amount: number): boolean => {
     if (state.tokens >= amount) {
@@ -93,6 +101,13 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       currentUser: { ...prev.currentUser, earnings: (prev.currentUser.earnings || 0) + amount }
+    }));
+  };
+  
+  const handleCashOut = (amount: number) => {
+    setState(prev => ({
+      ...prev,
+      currentUser: { ...prev.currentUser, earnings: (prev.currentUser.earnings || 0) - amount }
     }));
   };
 
@@ -127,7 +142,7 @@ const App: React.FC = () => {
       case View.TOKEN_SHOP:
         return <TokenShopView onBack={() => setView(View.EXPLORE)} currentTokens={state.tokens} onPurchase={addTokens} />;
       case View.PROFILE:
-        return <ProfileView user={state.currentUser} tokens={state.tokens} onGoShop={() => setView(View.TOKEN_SHOP)} onUpdateAlbum={handleUpdateAlbum} />;
+        return <ProfileView user={state.currentUser} tokens={state.tokens} onGoShop={() => setView(View.TOKEN_SHOP)} onUpdateAlbum={handleUpdateAlbum} onUpdateAvatar={handleUpdateAvatar} />;
       case View.USER_DETAIL:
         return state.selectedUserForDetail ? (
           <UserDetailView 
@@ -137,6 +152,11 @@ const App: React.FC = () => {
             onLive={openLive} 
           />
         ) : null;
+      case View.CASH_OUT:
+        return <CashOutView earnings={state.currentUser.earnings || 0} onBack={() => {
+          setState(prev => ({ ...prev, currentView: View.EXPLORE }));
+          setIsHomeMenuOpen(true);
+        }} onConfirmCashOut={handleCashOut} />;
       default:
         return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} />;
     }
@@ -148,7 +168,7 @@ const App: React.FC = () => {
         {renderView()}
       </main>
       
-      {![View.VIDEO_CALL, View.LIVE_STREAM, View.HOST_LIVE, View.USER_DETAIL].includes(state.currentView) && (
+      {![View.VIDEO_CALL, View.LIVE_STREAM, View.HOST_LIVE, View.USER_DETAIL, View.CASH_OUT].includes(state.currentView) && (
         <Navbar currentView={state.currentView} setView={setView} tokenCount={state.tokens} />
       )}
 
@@ -159,6 +179,7 @@ const App: React.FC = () => {
         onGoLive={() => handleMenuAction(View.HOST_LIVE)}
         onGoShop={() => handleMenuAction(View.TOKEN_SHOP)}
         onGoProfile={() => handleMenuAction(View.PROFILE)}
+        onGoCashOut={() => handleMenuAction(View.CASH_OUT)}
       />
     </div>
   );

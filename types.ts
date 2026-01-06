@@ -33,6 +33,7 @@ export enum View {
   TOKEN_SHOP = 'token_shop',
   USER_DETAIL = 'user_detail',
   HOME = 'home',
+  CASH_OUT = 'cash_out',
 }
 
 export interface AppState {

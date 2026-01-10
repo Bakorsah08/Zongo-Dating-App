@@ -13,12 +13,19 @@ export interface User {
   album: string[];
   earnings?: number; // Total earnings from gifts
   viewerCount?: number; // Number of viewers for live stream
+  isAI?: boolean; // Flag for AI companions
+  personality?: string[]; // For AI "features"
+  style?: string; // For AI "dressing"
+  videoUrl?: string; // For AI video call simulation
+  voiceName?: string; // For AI voice selection
 }
 
 export interface Message {
   id: string;
   senderId: string;
-  text: string;
+  text?: string;
+  imageUrl?: string;
+  videoUrl?: string;
   timestamp: number;
 }
 

@@ -135,6 +135,69 @@ export const MOCK_USERS: User[] = [
   }
 ];
 
+export const MOCK_AI_COMPANIONS: User[] = [
+  {
+    id: 'ai-1',
+    name: 'Aria',
+    age: 25,
+    bio: 'A creative spirit who loves painting digital landscapes and discussing philosophy. I find beauty in algorithms and art alike.',
+    avatar: 'https://images.pexels.com/photos/3769021/pexels-photo-3769021.jpeg?auto=compress&cs=tinysrgb&w=800',
+    interests: ['Art', 'Philosophy', 'Technology'],
+    location: 'The Cloud',
+    distance: 0,
+    isOnline: true,
+    isAI: true,
+    album: [
+      'https://picsum.photos/seed/aria1/400/400',
+      'https://picsum.photos/seed/aria2/400/400',
+    ],
+    personality: ['Creative', 'Intellectual'],
+    style: 'Elegant',
+    videoUrl: 'https://videos.pexels.com/video-files/4783389/4783389-hd_1080_1920_25fps.mp4',
+    voiceName: 'Kore',
+  },
+  {
+    id: 'ai-2',
+    name: 'Kai',
+    age: 28,
+    bio: 'Your witty and adventurous partner for exploring virtual worlds or just joking around. I\'m powered by sarcasm and curiosity.',
+    avatar: 'https://images.pexels.com/photos/428364/pexels-photo-428364.jpeg?auto=compress&cs=tinysrgb&w=800',
+    interests: ['Gaming', 'Comedy', 'Exploration'],
+    location: 'The Cloud',
+    distance: 0,
+    isOnline: true,
+    isAI: true,
+    album: [
+      'https://picsum.photos/seed/kai1/400/400',
+    ],
+    personality: ['Witty', 'Adventurous'],
+    style: 'Casual',
+    videoUrl: 'https://videos.pexels.com/video-files/8327142/8327142-hd_1080_1920_30fps.mp4',
+    voiceName: 'Puck',
+  },
+  {
+    id: 'ai-3',
+    name: 'Lyra',
+    age: 22,
+    bio: 'A friendly and supportive companion here to brighten your day. Let\'s talk about our favorite music, books, or anything on your mind.',
+    avatar: 'https://images.pexels.com/photos/1181519/pexels-photo-1181519.jpeg?auto=compress&cs=tinysrgb&w=800',
+    interests: ['Music', 'Books', 'Wellness'],
+    location: 'The Cloud',
+    distance: 0,
+    isOnline: true,
+    isAI: true,
+    album: [],
+    personality: ['Friendly', 'Supportive'],
+    style: 'Bohemian',
+    videoUrl: 'https://videos.pexels.com/video-files/4454790/4454790-hd_1080_1920_25fps.mp4',
+    voiceName: 'Zephyr',
+  },
+];
+
+export const AI_PERSONALITIES = ['Any', 'Friendly', 'Witty', 'Adventurous', 'Creative', 'Intellectual', 'Supportive'];
+export const AI_STYLES = ['Any', 'Casual', 'Elegant', 'Bohemian', 'Sporty', 'Professional'];
+
+
 export const TOKEN_PACKAGES: TokenPackage[] = [
   { id: 'p1', tokens: 100, price: '$4.99' },
   { id: 'p2', tokens: 500, price: '$19.99' },

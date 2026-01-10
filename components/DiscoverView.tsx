@@ -1,27 +1,59 @@
+
 import React, { useState, useMemo } from 'react';
-import { MOCK_USERS } from '../constants';
 import { User } from '../types';
+import { AI_PERSONALITIES, AI_STYLES } from '../constants';
 
 interface DiscoverViewProps {
+  users: User[];
+  aiCompanions: User[];
   onSelectUser: (user: User) => void;
   onSelectLive: (user: User) => void;
 }
 
-const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive }) => {
+const DiscoverView: React.FC<DiscoverViewProps> = ({ users, aiCompanions, onSelectUser, onSelectLive }) => {
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Filter states
+  const [profileType, setProfileType] = useState<'human' | 'ai'>('human');
+  
+  // Human filters
   const [filterOnline, setFilterOnline] = useState<'all' | 'online'>('all');
   const [maxDistance, setMaxDistance] = useState(50);
   const [minAge, setMinAge] = useState(18);
   const [maxAge, setMaxAge] = useState(50);
+  
+  // AI filters
+  const [aiMinAge, setAiMinAge] = useState(18);
+  const [aiMaxAge, setAiMaxAge] = useState(35);
+  const [aiPersonality, setAiPersonality] = useState('Any');
+  const [aiStyle, setAiStyle] = useState('Any');
 
-  const filteredUsers = useMemo(() => {
-    return MOCK_USERS.filter(user => {
+  const displayedProfiles = useMemo(() => {
+    if (profileType === 'ai') {
+      return aiCompanions.filter(user => {
+        const matchesAge = user.age >= aiMinAge && user.age <= aiMaxAge;
+        const matchesPersonality = aiPersonality === 'Any' || user.personality?.includes(aiPersonality);
+        const matchesStyle = aiStyle === 'Any' || user.style === aiStyle;
+        return matchesAge && matchesPersonality && matchesStyle;
+      });
+    }
+    
+    // Human filters
+    return users.filter(user => {
       const matchesOnline = filterOnline === 'all' || user.isOnline;
       const matchesDistance = user.distance <= maxDistance;
       const matchesAge = user.age >= minAge && user.age <= maxAge;
       return matchesOnline && matchesDistance && matchesAge;
     });
-  }, [filterOnline, maxDistance, minAge, maxAge]);
+  }, [
+    users, aiCompanions, profileType, 
+    filterOnline, maxDistance, minAge, maxAge,
+    aiMinAge, aiMaxAge, aiPersonality, aiStyle
+  ]);
+  
+  const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
+  const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
+  const areAnyFiltersActive = (profileType === 'human' && areHumanFiltersActive) || (profileType === 'ai' && areAIFiltersActive);
 
   return (
     <div className="p-4 flex flex-col gap-6 relative min-h-full">
@@ -35,7 +67,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive 
         <button 
           onClick={() => setShowFilters(!showFilters)}
           className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all shadow-lg ${
-            showFilters || filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50
+            showFilters || areAnyFiltersActive
             ? 'bg-pink-600 border-pink-500 text-white' 
             : 'bg-zinc-900 border-zinc-800 text-zinc-400'
           }`}
@@ -51,72 +83,79 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive 
             <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Filters</h3>
             <button onClick={() => setShowFilters(false)} className="text-zinc-500 hover:text-white text-xs">Close</button>
           </div>
-
+          
+          {/* Profile Type Toggle */}
           <div className="space-y-3">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Status</label>
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Profile Type</label>
             <div className="flex bg-black p-1 rounded-xl border border-zinc-800">
               <button 
-                onClick={() => setFilterOnline('all')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filterOnline === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}
+                onClick={() => setProfileType('human')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${profileType === 'human' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}
               >
-                Everyone
+                Humans
               </button>
               <button 
-                onClick={() => setFilterOnline('online')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filterOnline === 'online' ? 'bg-pink-600 text-white' : 'text-zinc-500'}`}
+                onClick={() => setProfileType('ai')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${profileType === 'ai' ? 'bg-pink-600 text-white' : 'text-zinc-500'}`}
               >
-                Online Now
+                AI Companions
               </button>
             </div>
           </div>
+          
+          {/* Divider */}
+          <hr className="border-zinc-800"/>
 
-          <div className="space-y-3">
-            <div className="flex justify-between items-end">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Max Distance</label>
-              <span className="text-xs font-bold text-pink-500">{maxDistance} miles</span>
+          {profileType === 'human' ? (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Status</label>
+                <div className="flex bg-black p-1 rounded-xl border border-zinc-800">
+                  <button onClick={() => setFilterOnline('all')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filterOnline === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>Everyone</button>
+                  <button onClick={() => setFilterOnline('online')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filterOnline === 'online' ? 'bg-pink-600 text-white' : 'text-zinc-500'}`}>Online Now</button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-end"><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Max Distance</label><span className="text-xs font-bold text-pink-500">{maxDistance} miles</span></div>
+                <input type="range" min="1" max="100" value={maxDistance} onChange={(e) => setMaxDistance(parseInt(e.target.value))} className="w-full h-1.5 bg-black rounded-lg appearance-none cursor-pointer accent-pink-600 border border-zinc-800"/>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-end"><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Age Range</label><span className="text-xs font-bold text-pink-500">{minAge} - {maxAge}</span></div>
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-1"><span className="text-[8px] text-zinc-600 uppercase font-bold">Min</span><input type="number" value={minAge} onChange={(e) => setMinAge(Math.max(18, parseInt(e.target.value) || 18))} className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-sm outline-none focus:border-pink-500"/></div>
+                  <div className="flex-1 space-y-1"><span className="text-[8px] text-zinc-600 uppercase font-bold">Max</span><input type="number" value={maxAge} onChange={(e) => setMaxAge(Math.min(100, parseInt(e.target.value) || 100))} className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-sm outline-none focus:border-pink-500"/></div>
+                </div>
+              </div>
             </div>
-            <input 
-              type="range" 
-              min="1" 
-              max="100" 
-              value={maxDistance} 
-              onChange={(e) => setMaxDistance(parseInt(e.target.value))}
-              className="w-full h-1.5 bg-black rounded-lg appearance-none cursor-pointer accent-pink-600 border border-zinc-800"
-            />
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex justify-between items-end">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Age Range</label>
-              <span className="text-xs font-bold text-pink-500">{minAge} - {maxAge}</span>
+          ) : (
+             <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="space-y-3">
+                <div className="flex justify-between items-end"><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Age</label><span className="text-xs font-bold text-pink-500">{aiMinAge} - {aiMaxAge}</span></div>
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-1"><span className="text-[8px] text-zinc-600 uppercase font-bold">Min</span><input type="number" value={aiMinAge} onChange={(e) => setAiMinAge(Math.max(18, parseInt(e.target.value) || 18))} className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-sm outline-none focus:border-pink-500"/></div>
+                  <div className="flex-1 space-y-1"><span className="text-[8px] text-zinc-600 uppercase font-bold">Max</span><input type="number" value={aiMaxAge} onChange={(e) => setAiMaxAge(Math.min(100, parseInt(e.target.value) || 100))} className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-sm outline-none focus:border-pink-500"/></div>
+                </div>
+              </div>
+               <div className="space-y-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Personality</label>
+                <select value={aiPersonality} onChange={e => setAiPersonality(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-lg py-2.5 px-3 text-sm outline-none focus:border-pink-500">
+                  {AI_PERSONALITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Style</label>
+                <select value={aiStyle} onChange={e => setAiStyle(e.target.value)} className="w-full bg-black border border-zinc-800 rounded-lg py-2.5 px-3 text-sm outline-none focus:border-pink-500">
+                  {AI_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="flex gap-4">
-               <div className="flex-1 space-y-1">
-                 <span className="text-[8px] text-zinc-600 uppercase font-bold">Min</span>
-                 <input 
-                    type="number" 
-                    value={minAge} 
-                    onChange={(e) => setMinAge(Math.max(18, parseInt(e.target.value) || 18))}
-                    className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-sm outline-none focus:border-pink-500"
-                  />
-               </div>
-               <div className="flex-1 space-y-1">
-                 <span className="text-[8px] text-zinc-600 uppercase font-bold">Max</span>
-                 <input 
-                    type="number" 
-                    value={maxAge} 
-                    onChange={(e) => setMaxAge(Math.min(100, parseInt(e.target.value) || 100))}
-                    className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-sm outline-none focus:border-pink-500"
-                  />
-               </div>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-3 pb-24">
-        {filteredUsers.length > 0 ? (
-          filteredUsers.map((user) => (
+        {displayedProfiles.length > 0 ? (
+          displayedProfiles.map((user) => (
             <div 
               key={user.id}
               onClick={() => user.isLive ? onSelectLive(user) : onSelectUser(user)}
@@ -129,6 +168,11 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive 
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
               
+              {user.isAI && (
+                 <div className="absolute top-2 left-2 flex items-center gap-1 bg-pink-600/80 backdrop-blur-md px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter text-white shadow-lg border border-white/20">
+                    <span className="text-[10px]">🤖</span> AI
+                  </div>
+              )}
               {user.isLive && (
                 <div className="absolute top-2 left-2 flex items-center gap-1.5">
                   <div className="flex items-center gap-1 bg-red-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter text-white shadow-lg animate-pulse">
@@ -144,17 +188,17 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ onSelectUser, onSelectLive 
                 </div>
               )}
 
-              {!user.isLive && user.isOnline && (
+              {!user.isLive && !user.isAI && user.isOnline && (
                 <div className="absolute top-2 left-2 w-2 h-2 bg-green-500 rounded-full border border-black shadow-lg"></div>
               )}
 
               <div className="absolute bottom-3 left-3 right-3">
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-sm font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
-                  {user.isOnline && !user.isLive && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
+                  {user.isOnline && !user.isLive && !user.isAI && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                 </div>
                 <p className="text-[10px] text-zinc-300 truncate drop-shadow-md">
-                  {user.isLive ? 'Tap to watch live' : `${user.distance} miles away`}
+                  {user.isAI ? "AI Companion" : (user.isLive ? 'Tap to watch live' : `${user.distance} miles away`)}
                 </p>
               </div>
             </div>

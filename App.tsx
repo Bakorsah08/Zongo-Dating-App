@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, User, AppState } from './types';
-import { MOCK_USERS } from './constants';
+import * as db from './services/databaseService';
 import DiscoverView from './components/DiscoverView';
 import ChatListView from './components/ChatListView';
 import ChatRoomView from './components/ChatRoomView';
@@ -15,28 +15,38 @@ import HomeMenuView from './components/HomeMenuView';
 import CashOutView from './components/CashOutView';
 
 const App: React.FC = () => {
-  const [state, setState] = useState<AppState>({
-    currentUser: {
-      id: 'me',
-      name: 'James',
-      age: 26,
-      bio: 'Lover of tech and design. Looking for someone to explore the world with.',
-      avatar: 'https://picsum.photos/seed/me/200',
-      interests: ['Coding', 'Design', 'Travel'],
-      location: 'New York',
-      distance: 0,
-      isOnline: true,
-      album: [
-        'https://picsum.photos/seed/me1/400/400',
-        'https://picsum.photos/seed/me2/400/400'
-      ],
-      earnings: 345
-    },
+  const [state, setState] = useState<Partial<AppState>>({
     tokens: 250,
-    matches: [MOCK_USERS[0], MOCK_USERS[1]],
     currentView: View.EXPLORE,
   });
   const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
+  const [discoverUsers, setDiscoverUsers] = useState<User[]>([]);
+  const [aiCompanions, setAiCompanions] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setIsLoading(true);
+      try {
+        const [currentUser, matches, usersForDiscovery, companions] = await Promise.all([
+          db.getCurrentUser(),
+          db.getMatches(),
+          db.getDiscoverUsers(),
+          db.getAICompanions(),
+        ]);
+        setState(prev => ({ ...prev, currentUser, matches }));
+        setDiscoverUsers(usersForDiscovery);
+        setAiCompanions(companions);
+      } catch (error) {
+        console.error("Failed to load initial data", error);
+        // Handle error state in UI
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadInitialData();
+  }, []);
+
 
   const setView = (view: View) => {
     if (view === View.HOME) {
@@ -49,7 +59,6 @@ const App: React.FC = () => {
   
   const handleMenuAction = (viewToGo: View) => {
     setIsHomeMenuOpen(false);
-    // Use a slight delay to allow the menu to animate out before view changes
     setTimeout(() => {
       setState(prev => ({ ...prev, currentView: viewToGo }));
     }, 200);
@@ -59,9 +68,11 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, currentView: View.USER_DETAIL, selectedUserForDetail: user }));
   };
 
-  const openChat = (user: User) => {
-    if (!state.matches.find(m => m.id === user.id)) {
-      setState(prev => ({ ...prev, matches: [...prev.matches, user] }));
+  const openChat = async (user: User) => {
+    const isAlreadyMatched = state.matches?.find(m => m.id === user.id);
+    if (!isAlreadyMatched && !user.isAI) { // Don't add AI to matches list
+      const newMatch = await db.addMatch(user.id);
+      setState(prev => ({ ...prev, matches: [...(prev.matches || []), newMatch] }));
     }
     setState(prev => ({ ...prev, currentView: View.CHAT_ROOM, selectedChatPartner: user }));
   };
@@ -70,23 +81,21 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, currentView: View.LIVE_STREAM, selectedLiveHost: user }));
   };
 
-  const handleUpdateAlbum = (newAlbum: string[]) => {
-    setState(prev => ({
-      ...prev,
-      currentUser: { ...prev.currentUser, album: newAlbum }
-    }));
+  const handleUpdateAlbum = async (newAlbum: string[]) => {
+    if (!state.currentUser) return;
+    const updatedUser = await db.updateUserAlbum(state.currentUser.id, newAlbum);
+    setState(prev => ({...prev, currentUser: updatedUser }));
   };
   
-  const handleUpdateAvatar = (newAvatarUrl: string) => {
-    setState(prev => ({
-      ...prev,
-      currentUser: { ...prev.currentUser, avatar: newAvatarUrl }
-    }));
+  const handleUpdateAvatar = async (newAvatarUrl: string) => {
+    if (!state.currentUser) return;
+    const updatedUser = await db.updateUserAvatar(state.currentUser.id, newAvatarUrl);
+    setState(prev => ({...prev, currentUser: updatedUser }));
   };
 
   const deductTokens = (amount: number): boolean => {
-    if (state.tokens >= amount) {
-      setState(prev => ({ ...prev, tokens: prev.tokens - amount }));
+    if (state.tokens && state.tokens >= amount) {
+      setState(prev => ({ ...prev, tokens: (prev.tokens || 0) - amount }));
       return true;
     }
     setView(View.TOKEN_SHOP);
@@ -94,29 +103,36 @@ const App: React.FC = () => {
   };
 
   const addTokens = (amount: number) => {
-    setState(prev => ({ ...prev, tokens: prev.tokens + amount }));
+    setState(prev => ({ ...prev, tokens: (prev.tokens || 0) + amount }));
   };
 
-  const addEarnings = (amount: number) => {
-    setState(prev => ({
-      ...prev,
-      currentUser: { ...prev.currentUser, earnings: (prev.currentUser.earnings || 0) + amount }
-    }));
+  const addEarnings = async (amount: number) => {
+    if (!state.currentUser) return;
+    const updatedUser = await db.updateUserEarnings(state.currentUser.id, amount);
+    setState(prev => ({...prev, currentUser: updatedUser }));
   };
   
-  const handleCashOut = (amount: number) => {
-    setState(prev => ({
-      ...prev,
-      currentUser: { ...prev.currentUser, earnings: (prev.currentUser.earnings || 0) - amount }
-    }));
+  const handleCashOut = async (amount: number) => {
+    if (!state.currentUser) return;
+    const updatedUser = await db.performCashOut(state.currentUser.id, amount);
+    setState(prev => ({ ...prev, currentUser: updatedUser }));
   };
+  
+  if (isLoading || !state.currentUser) {
+    return (
+      <div className="flex flex-col min-h-screen bg-black text-white max-w-md mx-auto items-center justify-center">
+        <div className="text-pink-500 text-4xl animate-bounce">❤</div>
+        <p className="mt-4 font-bold tracking-widest uppercase">Loading Profile...</p>
+      </div>
+    );
+  }
 
   const renderView = () => {
     switch (state.currentView) {
       case View.EXPLORE:
-        return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} />;
+        return <DiscoverView users={discoverUsers} aiCompanions={aiCompanions} onSelectUser={openUserDetail} onSelectLive={openLive} />;
       case View.CHATS:
-        return <ChatListView matches={state.matches} onChatSelect={openChat} />;
+        return <ChatListView matches={state.matches || []} onChatSelect={openChat} />;
       case View.CHAT_ROOM:
         return state.selectedChatPartner ? (
           <ChatRoomView 
@@ -132,17 +148,17 @@ const App: React.FC = () => {
             partner={state.selectedChatPartner} 
             onEnd={() => setView(View.CHAT_ROOM)} 
             deductTokens={deductTokens}
-            tokens={state.tokens}
+            tokens={state.tokens!}
           />
         ) : null;
       case View.LIVE_STREAM:
-        return <LiveStreamView host={state.selectedLiveHost || MOCK_USERS[0]} onEnd={() => setView(View.EXPLORE)} deductTokens={deductTokens} />;
+        return <LiveStreamView host={state.selectedLiveHost!} onEnd={() => setView(View.EXPLORE)} deductTokens={deductTokens} />;
       case View.HOST_LIVE:
-        return <LiveStreamView isHost host={state.currentUser} onEnd={() => setView(View.EXPLORE)} deductTokens={deductTokens} onReceiveGift={addEarnings} />;
+        return <LiveStreamView isHost host={state.currentUser!} onEnd={() => setView(View.EXPLORE)} deductTokens={deductTokens} onReceiveGift={addEarnings} />;
       case View.TOKEN_SHOP:
-        return <TokenShopView onBack={() => setView(View.EXPLORE)} currentTokens={state.tokens} onPurchase={addTokens} />;
+        return <TokenShopView onBack={() => setView(View.EXPLORE)} currentTokens={state.tokens!} onPurchase={addTokens} />;
       case View.PROFILE:
-        return <ProfileView user={state.currentUser} tokens={state.tokens} onGoShop={() => setView(View.TOKEN_SHOP)} onUpdateAlbum={handleUpdateAlbum} onUpdateAvatar={handleUpdateAvatar} />;
+        return <ProfileView user={state.currentUser!} tokens={state.tokens!} onGoShop={() => setView(View.TOKEN_SHOP)} onUpdateAlbum={handleUpdateAlbum} onUpdateAvatar={handleUpdateAvatar} />;
       case View.USER_DETAIL:
         return state.selectedUserForDetail ? (
           <UserDetailView 
@@ -153,12 +169,12 @@ const App: React.FC = () => {
           />
         ) : null;
       case View.CASH_OUT:
-        return <CashOutView earnings={state.currentUser.earnings || 0} onBack={() => {
+        return <CashOutView earnings={state.currentUser?.earnings || 0} onBack={() => {
           setState(prev => ({ ...prev, currentView: View.EXPLORE }));
           setIsHomeMenuOpen(true);
         }} onConfirmCashOut={handleCashOut} />;
       default:
-        return <DiscoverView onSelectUser={openUserDetail} onSelectLive={openLive} />;
+        return <DiscoverView users={discoverUsers} aiCompanions={aiCompanions} onSelectUser={openUserDetail} onSelectLive={openLive} />;
     }
   };
 
@@ -168,14 +184,14 @@ const App: React.FC = () => {
         {renderView()}
       </main>
       
-      {![View.VIDEO_CALL, View.LIVE_STREAM, View.HOST_LIVE, View.USER_DETAIL, View.CASH_OUT].includes(state.currentView) && (
-        <Navbar currentView={state.currentView} setView={setView} tokenCount={state.tokens} />
+      {![View.VIDEO_CALL, View.LIVE_STREAM, View.HOST_LIVE, View.USER_DETAIL, View.CASH_OUT].includes(state.currentView!) && (
+        <Navbar currentView={state.currentView!} setView={setView} tokenCount={state.tokens!} />
       )}
 
       <HomeMenuView
         isOpen={isHomeMenuOpen}
         onClose={() => setIsHomeMenuOpen(false)}
-        user={state.currentUser}
+        user={state.currentUser!}
         onGoLive={() => handleMenuAction(View.HOST_LIVE)}
         onGoShop={() => handleMenuAction(View.TOKEN_SHOP)}
         onGoProfile={() => handleMenuAction(View.PROFILE)}

@@ -21,11 +21,15 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
   const [showDeduction, setShowDeduction] = useState(false);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null); // Ref for AI partner video
   const audioContextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<any>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const billingIntervalRef = useRef<number | null>(null);
+  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Main call setup effect
   useEffect(() => {
@@ -41,8 +45,13 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
         const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         audioContextRef.current = outputAudioContext;
 
+        if (partner.isAI) {
+            analyserRef.current = outputAudioContext.createAnalyser();
+            analyserRef.current.fftSize = 256;
+        }
+
         const sessionPromise = ai.live.connect({
-          model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+          model: 'gemini-2.5-flash-native-audio-preview-12-2025',
           callbacks: {
             onopen: () => setIsCalling(false),
             onmessage: async (message: any) => {
@@ -52,7 +61,14 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
                 const audioBuffer = await decodeAudioData(decode(base64Audio), outputAudioContext, 24000, 1);
                 const source = outputAudioContext.createBufferSource();
                 source.buffer = audioBuffer;
-                source.connect(outputAudioContext.destination);
+                
+                if (analyserRef.current) {
+                  source.connect(analyserRef.current);
+                  analyserRef.current.connect(outputAudioContext.destination);
+                } else {
+                  source.connect(outputAudioContext.destination);
+                }
+                
                 source.start(nextStartTimeRef.current);
                 nextStartTimeRef.current += audioBuffer.duration;
                 sourcesRef.current.add(source);
@@ -69,9 +85,11 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: partner.voiceName || 'Kore' } },
             },
-            systemInstruction: `You are ${partner.name}. You are on a video date with the user. Be romantic, playful, and charming. React naturally to what they say. Ask about their day and share small stories about yours.`,
+            systemInstruction: `You are ${partner.name}, a ${partner.style} person with a ${partner.personality?.join(' and ')} personality. Your bio is "${partner.bio}". You are on a video date. Your goal is to be a romantic, playful, and charming companion. 
+**Conversation Style:** Speak in a natural, flowing manner with realistic pacing. Use pauses to seem thoughtful. Vary your tone to express emotion consistent with your personality. For example, if you are witty, use light sarcasm; if supportive, be warm and encouraging.
+**Interaction:** React naturally to what the user says. Ask engaging questions about their day, their interests, and share small, interesting anecdotes about your "life" based on your bio and personality. Make them feel like they are talking to a real person.`,
           },
         });
         
@@ -108,8 +126,87 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
       if (localVideoRef.current?.srcObject) {
         (localVideoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, []);
+
+  // Programmatically play AI video once call connects
+  useEffect(() => {
+    if (remoteVideoRef.current && !isCalling) {
+      const playPromise = remoteVideoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          // Browsers may interrupt video playback for various reasons,
+          // such as the component unmounting. We should only log errors
+          // that are not the expected 'AbortError'.
+          if (error.name !== 'AbortError') {
+            console.error("AI video playback failed:", error);
+          }
+        });
+      }
+    }
+  }, [isCalling]);
+  
+  // Audio visualizer effect
+  useEffect(() => {
+    if (!partner.isAI || isCalling || !analyserRef.current) return;
+  
+    const canvas = visualizerCanvasRef.current;
+    if (!canvas) return;
+  
+    const canvasCtx = canvas.getContext('2d');
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+  
+    const draw = () => {
+      animationFrameRef.current = requestAnimationFrame(draw);
+  
+      analyser.getByteFrequencyData(dataArray);
+  
+      const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
+  
+      if (!canvasCtx) return;
+      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+  
+      // Only draw if there's sound
+      if (average > 10) { 
+        canvasCtx.lineWidth = 3;
+        const gradient = canvasCtx.createLinearGradient(0, 0, canvas.width, 0);
+        gradient.addColorStop(0, '#f472b6');
+        gradient.addColorStop(0.5, '#db2777');
+        gradient.addColorStop(1, '#f472b6');
+        canvasCtx.strokeStyle = gradient;
+        canvasCtx.beginPath();
+  
+        const sliceWidth = canvas.width * 1.0 / bufferLength;
+        let x = 0;
+  
+        for (let i = 0; i < bufferLength; i++) {
+          const v = dataArray[i] / 128.0;
+          const y = v * canvas.height / 2;
+  
+          if (i === 0) {
+            canvasCtx.moveTo(x, y);
+          } else {
+            canvasCtx.lineTo(x, y);
+          }
+  
+          x += sliceWidth;
+        }
+  
+        canvasCtx.lineTo(canvas.width, canvas.height / 2);
+        canvasCtx.stroke();
+      }
+    };
+  
+    draw();
+  
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [partner.isAI, isCalling]);
+
 
   // Billing logic effect
   useEffect(() => {
@@ -151,17 +248,41 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
     <div className="relative h-screen bg-zinc-900 overflow-hidden">
       {/* Remote Video (Partner) */}
       <div className="absolute inset-0 bg-black">
-        <img src={partner.avatar} className="w-full h-full object-cover blur-sm opacity-50" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <img src={partner.avatar} className="w-40 h-40 rounded-full object-cover border-4 border-pink-500 shadow-2xl animate-pulse" />
-          <h2 className="text-2xl font-bold mt-6">{partner.name}</h2>
-          <p className="text-pink-400 font-medium">In AI Video Call...</p>
-        </div>
+        {partner.isAI && partner.videoUrl ? (
+          <video
+            ref={remoteVideoRef}
+            key={partner.id}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+          >
+            <source src={partner.videoUrl} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        ) : (
+          <>
+            <img src={partner.avatar} className="w-full h-full object-cover blur-sm opacity-50" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <img src={partner.avatar} className="w-40 h-40 rounded-full object-cover border-4 border-pink-500 shadow-2xl animate-pulse" />
+              <h2 className="text-2xl font-bold mt-6">{partner.name}</h2>
+              <p className="text-pink-400 font-medium">In AI Video Call...</p>
+            </div>
+          </>
+        )}
       </div>
+      
+      {/* Visualizer and Gradient Overlay */}
+      <div className="absolute inset-0 flex flex-col justify-end" style={{background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 40%)'}}>
+         {partner.isAI && <canvas ref={visualizerCanvasRef} className="w-full h-24 mb-32 opacity-80" />}
+      </div>
+
 
       {/* Local Video Overlay */}
       <div className="absolute top-4 right-4 w-32 h-44 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black">
         <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+        {isVideoOff && <div className="absolute inset-0 bg-black flex items-center justify-center text-3xl">🚫</div>}
       </div>
       
       {/* Token Balance */}

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
 
@@ -48,7 +49,10 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
       <div className="flex-1 -mt-10 relative z-10 bg-black rounded-t-[40px] px-6 pt-8 pb-32">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-black">{user.name}, {user.age}</h1>
+            <h1 className="text-3xl font-black flex items-center gap-2">
+              {user.name}, {user.age}
+              {user.isAI && <span className="text-xs font-bold bg-pink-600/80 text-white px-2 py-1 rounded-full border border-white/20">🤖 AI</span>}
+            </h1>
             <p className="text-zinc-400 text-sm mt-1">📍 {user.location}</p>
           </div>
           <div className="flex gap-2">
@@ -62,7 +66,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
             onClick={() => onChat(user)}
             className="gradient-pink py-4 rounded-2xl font-black text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            💬 Chat Now
+            {user.isAI ? "💬 AI Chat" : "💬 Chat Now"}
           </button>
           {user.isLive ? (
             <button 
@@ -76,6 +80,13 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
                   {user.viewerCount.toLocaleString()}
                 </span>
               )}
+            </button>
+          ) : user.isAI ? (
+            <button 
+              onClick={() => onChat(user)} // Should probably lead to video call initiation
+              className="bg-white text-black py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              📹 AI Video Call
             </button>
           ) : (
             <button 
@@ -96,34 +107,41 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
 
         {/* Interests */}
         <section className="mb-8">
-          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Interests</h4>
+          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">{user.isAI ? 'Personality' : 'Interests'}</h4>
           <div className="flex flex-wrap gap-2">
-            {user.interests.map(i => (
+            {(user.isAI ? user.personality : user.interests)?.map(i => (
               <span key={i} className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-medium text-zinc-300">
                 {i}
               </span>
             ))}
+            {user.isAI && user.style && (
+              <span className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-medium text-zinc-300">
+                {user.style} Style
+              </span>
+            )}
           </div>
         </section>
 
         {/* Album */}
-        <section>
-          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Photo Album</h4>
-          <div className="grid grid-cols-2 gap-3">
-            {user.album.map((img, idx) => (
-              <div 
-                key={idx} 
-                onClick={() => setViewingIndex(idx)}
-                className="aspect-square rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 group cursor-pointer active:scale-95 transition-transform"
-              >
-                <img 
-                  src={img} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                />
-              </div>
-            ))}
-          </div>
-        </section>
+        {user.album.length > 0 && (
+          <section>
+            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Photo Album</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {user.album.map((img, idx) => (
+                <div 
+                  key={idx} 
+                  onClick={() => setViewingIndex(idx)}
+                  className="aspect-square rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 group cursor-pointer active:scale-95 transition-transform"
+                >
+                  <img 
+                    src={img} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Full Screen Image Viewer */}

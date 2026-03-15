@@ -17,9 +17,10 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, setView, tokenCount, liveS
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto glass-effect border-t border-zinc-800 flex justify-around items-center py-3 z-50">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto glass-effect border-t border-zinc-800 flex justify-around items-center py-3 z-[60] pointer-events-auto">
       {allTabs.map((tab) => (
         <button
+          type="button"
           key={tab.view}
           onClick={() => setView(tab.view)}
           className={`flex flex-col items-center gap-1 transition-all ${

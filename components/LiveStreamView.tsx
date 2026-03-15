@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TOKEN_COSTS, GIFTS } from '../constants';
+import { getGifts, getUsers, getMonetizationSettings } from '../data';
 import { User, Gift } from '../types';
 
 interface Particle {
@@ -11,19 +11,31 @@ interface Particle {
 
 interface LiveStreamViewProps {
   host: User;
+  participants?: User[];
   onEnd: () => void;
   deductTokens: (amount: number) => boolean;
   isHost?: boolean;
   onReceiveGift?: (amount: number) => void;
+  onViewProfile?: (user: User) => void;
+  onAddGuest?: (user: User) => void;
+  onSwitchMain?: (user: User) => void;
 }
 
-const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductTokens, isHost, onReceiveGift }) => {
+const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, participants: participantsProp, onEnd, deductTokens, isHost, onReceiveGift, onViewProfile, onAddGuest, onSwitchMain }) => {
+  const participants = participantsProp && participantsProp.length > 0 ? participantsProp : [host];
+  const mainUser = participants[0];
+  const panes = participants.slice(1, 5); // Up to 4 added participants
+  const canAddMore = isHost && participants.length < 5;
+  const PANE_SLOTS = 4; // Always show 4 pane slots
   const [hasJoined, setHasJoined] = useState(isHost || false);
   const [viewerCount, setViewerCount] = useState(isHost ? 0 : (host.viewerCount || Math.floor(Math.random() * 500) + 100));
   const [likeCount, setLikeCount] = useState(isHost ? 0 : Math.floor(Math.random() * 2000) + 500);
   const [hostEarnings, setHostEarnings] = useState(host.earnings || 0);
   const [comments, setComments] = useState<{user: string, text: string, isGift?: boolean}[]>([]);
   const [showGiftSelector, setShowGiftSelector] = useState(false);
+  const [showAddGuest, setShowAddGuest] = useState(false);
+  const [panesVisible, setPanesVisible] = useState(true);
+  const [panesTouchStart, setPanesTouchStart] = useState<number | null>(null);
   const [messageInput, setMessageInput] = useState('');
   const [particles, setParticles] = useState<Particle[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -62,7 +74,9 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
 
         // Host receives simulated gifts from "fans"
         if (isHost && Math.random() > 0.85) {
-          const randomGift = GIFTS[Math.floor(Math.random() * 3)]; // Small gifts mostly
+          const gifts = getGifts();
+          const randomGift = gifts[Math.floor(Math.random() * Math.min(3, gifts.length))];
+          if (randomGift) {
           setHostEarnings(prev => prev + randomGift.value);
           setComments(prev => [
             ...prev.slice(-15), 
@@ -70,6 +84,7 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
           ]);
           spawnParticle(randomGift.icon); // Visual feedback for received gift
           onReceiveGift?.(randomGift.value);
+          }
         }
       }, isHost ? 2000 : 3000);
       
@@ -77,10 +92,10 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
     }
   }, [hasJoined, isHost]);
 
-  // Handle Camera for Host
+  // Handle Camera for Host (when host is main view)
   useEffect(() => {
     let stream: MediaStream | null = null;
-    if (isHost && hasJoined) {
+    if (isHost && hasJoined && mainUser.id === host.id) {
       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(s => {
           stream = s;
@@ -91,10 +106,13 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
     return () => {
       stream?.getTracks().forEach(track => track.stop());
     };
-  }, [isHost, hasJoined]);
+  }, [isHost, hasJoined, mainUser.id, host.id]);
+
+  const liveEntryCost = getMonetizationSettings().liveStreamEntryTokens;
+  const giftingEnabled = getMonetizationSettings().giftingEnabled;
 
   const handleJoin = () => {
-    if (deductTokens(TOKEN_COSTS.LIVE_STREAM)) {
+    if (deductTokens(liveEntryCost)) {
       setHasJoined(true);
     }
   };
@@ -125,6 +143,15 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
     spawnParticle('🔥');
   };
 
+  const handlePanesTouchStart = (e: React.TouchEvent) => setPanesTouchStart(e.touches[0].clientX);
+  const handlePanesTouchEnd = (e: React.TouchEvent) => {
+    if (panesTouchStart === null) return;
+    const diff = e.changedTouches[0].clientX - panesTouchStart;
+    if (diff > 50) setPanesVisible(false);
+    else if (diff < -50) setPanesVisible(true);
+    setPanesTouchStart(null);
+  };
+
   if (!hasJoined) {
     return (
       <div className="h-full flex flex-col p-6 items-center justify-center text-center bg-black">
@@ -149,7 +176,7 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
             <div className="bg-zinc-800/80 backdrop-blur-md p-4 rounded-2xl w-full border border-white/5">
                <div className="flex justify-between items-center mb-3">
                  <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Entry Fee</span>
-                 <span className="font-black text-pink-500 flex items-center gap-1">💎 {TOKEN_COSTS.LIVE_STREAM}</span>
+                 <span className="font-black text-pink-500 flex items-center gap-1">💎 {liveEntryCost}</span>
                </div>
                <button 
                  onClick={handleJoin}
@@ -166,7 +193,7 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
   }
 
   return (
-    <div className="h-screen bg-black relative flex flex-col overflow-hidden">
+    <div className="h-[calc(100vh-5rem)] bg-black relative flex flex-col overflow-hidden">
       {/* Particle Overlay */}
       {particles.map(p => (
         <span 
@@ -184,37 +211,115 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
 
       {/* Background Stream */}
       <div className="absolute inset-0">
-        {isHost ? (
+        {isHost && mainUser.id === host.id ? (
           <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover scale-x-[-1]" />
         ) : (
-          <img src={host.avatar} className="w-full h-full object-cover" />
+          <img src={mainUser.avatar} className="w-full h-full object-cover" alt={mainUser.name} />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90"></div>
       </div>
 
-      {/* Top UI Bar */}
-      <div className="relative p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-1 pr-3 rounded-full border border-white/10">
-          <img src={host.avatar} className="w-8 h-8 rounded-full border border-pink-500" />
-          <div>
-             <h3 className="text-[10px] font-bold leading-tight">{isHost ? 'Your Stream' : host.name}</h3>
-             <div className="flex items-center gap-1 text-[8px] text-zinc-300">
-               <span className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></span> {hostEarnings.toLocaleString()} earned
-             </div>
+      {/* Vertical Panes - Right Side (1/3 width): Host=4 slots with +, Viewer=participants only */}
+      {(isHost || panes.length > 0) && (
+        <div
+          className={`absolute top-0 right-0 bottom-0 z-20 flex flex-col justify-center gap-2 py-20 px-2 transition-transform duration-300 ease-out ${
+            panesVisible ? 'translate-x-0' : 'translate-x-full'
+          }`}
+          onTouchStart={handlePanesTouchStart}
+          onTouchEnd={handlePanesTouchEnd}
+          style={{ touchAction: 'pan-y', width: '33.333%' }}
+        >
+          {isHost
+            ? Array.from({ length: PANE_SLOTS }).map((_, i) => {
+                const user = panes[i];
+                if (user) {
+                  return (
+                    <button
+                      key={user.id}
+                      onClick={() => onSwitchMain?.(user)}
+                      className="w-full aspect-square max-h-24 rounded-xl overflow-hidden border-2 border-white/30 shadow-lg flex-shrink-0 active:scale-95 transition-transform focus:ring-2 focus:ring-pink-500"
+                    >
+                      <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={`empty-${i}`}
+                    onClick={() => setShowAddGuest(true)}
+                    className="w-full aspect-square max-h-24 rounded-xl border-2 border-dashed border-white/40 flex items-center justify-center text-white/60 text-3xl flex-shrink-0 hover:bg-white/10 transition-colors"
+                  >
+                    +
+                  </button>
+                );
+              })
+            : panes.map((user) => (
+                <button
+                  key={user.id}
+                  onClick={() => onSwitchMain?.(user)}
+                  className="w-full aspect-square max-h-24 rounded-xl overflow-hidden border-2 border-white/30 shadow-lg flex-shrink-0 active:scale-95 transition-transform focus:ring-2 focus:ring-pink-500"
+                >
+                  <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
+                </button>
+              ))}
+        </div>
+      )}
+
+      {/* Swipe zone & hint - when panes hidden */}
+      {(isHost || panes.length > 0) && !panesVisible && (
+        <div
+          className="absolute right-0 top-0 bottom-0 w-12 z-10 flex items-center justify-end pr-1"
+          onTouchStart={handlePanesTouchStart}
+          onTouchEnd={handlePanesTouchEnd}
+        >
+          <button
+            onClick={() => setPanesVisible(true)}
+            className="w-8 h-16 bg-black/50 rounded-l-lg flex items-center justify-center text-white/70 text-xs"
+          >
+            ←
+          </button>
+        </div>
+      )}
+
+      {/* Top UI Bar - reference layout: [Live pill] ... [Stats + Exit grouped] */}
+      <div 
+        className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between gap-4 z-30 pointer-events-none"
+        style={{ right: (panes.length > 0 || (isHost && canAddMore)) && panesVisible ? '33.333%' : 0 }}
+      >
+        {/* Left: Live indicator pill - profile with name & earnings beside it */}
+        <div 
+          className={`pointer-events-auto flex items-center gap-3 flex-1 min-w-0 shrink-0 max-w-[55%] py-2 pl-2 pr-4 rounded-full border-2 border-green-500/80 bg-black/40 ${!isHost && onViewProfile ? 'cursor-pointer hover:bg-black/50 active:scale-[0.98] transition-all' : ''}`}
+          onClick={!isHost && onViewProfile ? () => onViewProfile(mainUser) : undefined}
+          role={!isHost && onViewProfile ? 'button' : undefined}
+        >
+          <img src={mainUser.avatar} className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-white/20" alt={mainUser.name} />
+          <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+            <span className="text-sm font-bold text-white whitespace-nowrap overflow-hidden text-ellipsis">
+              {isHost && mainUser.id === host.id ? 'Your Stream' : mainUser.name}
+            </span>
+            <span className="text-xs text-zinc-300 font-medium">
+              {(isHost && mainUser.id === host.id ? hostEarnings : mainUser.earnings || 0).toLocaleString()} earned
+            </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isHost && (
-            <div className="bg-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">
-              LIVE
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold border border-white/10">
-             <span className="text-zinc-400">👥</span> {Math.max(0, viewerCount).toLocaleString()}
-             <span className="w-px h-2.5 bg-white/20 mx-0.5"></span>
-             <span className="text-pink-500">❤️</span> {likeCount.toLocaleString()}
+
+        {/* Right: Stats pill + Exit button grouped (exit overlaps stats) */}
+        <div className="pointer-events-auto flex items-center flex-shrink-0">
+          <div className="flex items-center gap-2 bg-zinc-800/95 border border-zinc-700 py-2 pl-4 pr-6 rounded-l-full">
+            <span className="flex items-center gap-1 text-xs font-bold text-zinc-200">
+              <span>👥</span> {Math.max(0, viewerCount).toLocaleString()}
+            </span>
+            <span className="w-px h-4 bg-zinc-600"></span>
+            <span className="flex items-center gap-1 text-xs font-bold text-pink-400">
+              <span>❤️</span> {likeCount.toLocaleString()}
+            </span>
           </div>
-          <button onClick={onEnd} className="bg-zinc-900/50 p-2 rounded-full text-white text-sm">✕</button>
+          <button
+            onClick={onEnd}
+            className="relative -ml-4 w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 border-2 border-zinc-700 text-white text-lg font-bold hover:bg-zinc-700 z-10"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
@@ -253,12 +358,14 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
         
         {!isHost ? (
           <>
-            <button 
-              onClick={() => setShowGiftSelector(true)}
-              className="w-12 h-12 rounded-full bg-white/60 backdrop-blur-md flex items-center justify-center shadow-lg text-xl active:scale-90 transition-all hover:bg-white/80"
-            >
-              🎁
-            </button>
+            {giftingEnabled && (
+              <button 
+                onClick={() => setShowGiftSelector(true)}
+                className="w-12 h-12 rounded-full bg-white/60 backdrop-blur-md flex items-center justify-center shadow-lg text-xl active:scale-90 transition-all hover:bg-white/80"
+              >
+                🎁
+              </button>
+            )}
             <button 
               onClick={() => {
                 setLikeCount(prev => prev + 1);
@@ -279,6 +386,52 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
         )}
       </div>
 
+      {/* Add Guest Modal (Host Only) - Online users or viewers on live */}
+      {isHost && showAddGuest && (() => {
+        const allUsers = getUsers().filter(u => u.id !== host.id && !participants.find(p => p.id === u.id));
+        const onlineUsers = allUsers.filter(u => u.isOnline || u.isLive);
+        const viewerNames = [...new Set(comments.map(c => c.user).filter(n => n !== 'You'))];
+        const viewersOnLive = viewerNames
+          .map(name => allUsers.find(u => name.toLowerCase().includes(u.name.toLowerCase())))
+          .filter((u): u is User => !!u);
+        const addableUsers = [...onlineUsers];
+        viewersOnLive.forEach(v => { if (!addableUsers.find(a => a.id === v.id)) addableUsers.push(v); });
+        return (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
+            <div className="absolute inset-0" onClick={() => setShowAddGuest(false)} />
+            <div className="w-full max-w-md bg-zinc-950 border-t border-zinc-800 rounded-t-[32px] p-6 pb-12 relative animate-in slide-in-from-bottom duration-300 max-h-[60vh] flex flex-col">
+              <div className="w-12 h-1 bg-zinc-800 rounded-full mx-auto mb-6" />
+              <div className="flex justify-between items-center mb-4 px-1">
+                <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400">Add to Live</h3>
+                <button onClick={() => setShowAddGuest(false)} className="text-zinc-600 text-sm font-bold">Close</button>
+              </div>
+              <p className="text-xs text-zinc-500 mb-4">Add someone online or watching your stream ({panes.length}/4 added)</p>
+              <div className="overflow-y-auto flex-1 space-y-2">
+                {addableUsers.length > 0 ? addableUsers.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => {
+                      onAddGuest?.(user);
+                      setShowAddGuest(false);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-pink-500/50 transition-all"
+                  >
+                    <img src={user.avatar} className="w-12 h-12 rounded-full object-cover" alt={user.name} />
+                    <div className="text-left flex-1">
+                      <p className="font-bold text-sm">{user.name}, {user.age}</p>
+                      <p className="text-[10px] text-zinc-500">{user.isOnline ? '🟢 Online' : 'Watching'} · {user.location}</p>
+                    </div>
+                    <span className="text-pink-500 text-sm font-bold">+ Add</span>
+                  </button>
+                )) : (
+                  <p className="text-center text-zinc-500 py-8">No one online or watching to add</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Gift Selection Bottom Sheet (Viewer Only) */}
       {!isHost && showGiftSelector && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
@@ -292,7 +445,7 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({ host, onEnd, deductToke
             </div>
 
             <div className="grid grid-cols-4 gap-4">
-              {GIFTS.map((gift) => (
+              {getGifts().map((gift) => (
                 <button
                   key={gift.id}
                   onClick={() => handleSendGift(gift)}

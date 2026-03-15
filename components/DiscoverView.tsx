@@ -1,16 +1,21 @@
-
 import React, { useState, useMemo } from 'react';
-import { User } from '../types';
-import { AI_PERSONALITIES, AI_STYLES } from '../constants';
+import { getUsers, getBadges, getMonetizationSettings } from '../data';
+import { User, UserGender } from '../types';
 
 interface DiscoverViewProps {
-  users: User[];
-  aiCompanions: User[];
+  userGender?: UserGender;
   onSelectUser: (user: User) => void;
   onSelectLive: (user: User) => void;
+  onGoLive?: () => void;
 }
 
-const DiscoverView: React.FC<DiscoverViewProps> = ({ users, aiCompanions, onSelectUser, onSelectLive }) => {
+const getBadgeRank = (user: User): number => {
+  const tier = user.badgeTier || 'none';
+  return getBadges().find(b => b.id === tier)?.rank ?? 0;
+};
+
+const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, onSelectLive, onGoLive }) => {
+  const liveStreamingEnabled = getMonetizationSettings().liveStreamingEnabled;
   const [showFilters, setShowFilters] = useState(false);
   
   // Filter states
@@ -28,29 +33,47 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ users, aiCompanions, onSele
   const [aiPersonality, setAiPersonality] = useState('Any');
   const [aiStyle, setAiStyle] = useState('Any');
 
-  const displayedProfiles = useMemo(() => {
-    if (profileType === 'ai') {
-      return aiCompanions.filter(user => {
-        const matchesAge = user.age >= aiMinAge && user.age <= aiMaxAge;
-        const matchesPersonality = aiPersonality === 'Any' || user.personality?.includes(aiPersonality);
-        const matchesStyle = aiStyle === 'Any' || user.style === aiStyle;
-        return matchesAge && matchesPersonality && matchesStyle;
+  const filteredUsers = useMemo(() => {
+    let filtered = getUsers()
+      .filter(user => user.id !== 'me') // Exclude current user
+      .filter(user => {
+        const matchesOnline = filterOnline === 'all' || user.isOnline;
+        const matchesDistance = user.distance <= maxDistance;
+        const matchesAge = user.age >= minAge && user.age <= maxAge;
+        return matchesOnline && matchesDistance && matchesAge;
       });
+
+    const beforeGenderFilter = [...filtered];
+
+    // Gender-based filtering: 90% opposite gender, 10% same (or users without gender)
+    if (userGender) {
+      const preferredGender = userGender === 'male' ? 'female' : 'male';
+      const preferred = filtered.filter(u => u.gender === preferredGender);
+      const other = filtered.filter(u => u.gender === userGender || u.gender === undefined);
+      const otherCount = preferred.length > 0 ? Math.ceil(preferred.length / 9) : other.length; // ~10% of total, or all "other" if no preferred
+      filtered = [...preferred, ...other.slice(0, otherCount)];
+
+      // Fallback: if gender filter yields no results (e.g. users lack gender in storage), show all
+      if (filtered.length === 0 && beforeGenderFilter.length > 0) {
+        filtered = beforeGenderFilter;
+      }
     }
-    
-    // Human filters
-    return users.filter(user => {
-      const matchesOnline = filterOnline === 'all' || user.isOnline;
-      const matchesDistance = user.distance <= maxDistance;
-      const matchesAge = user.age >= minAge && user.age <= maxAge;
-      return matchesOnline && matchesDistance && matchesAge;
+
+    // Sort by VIP badge rank (higher first), then by distance
+    return [...filtered].sort((a, b) => {
+      const rankA = getBadgeRank(a);
+      const rankB = getBadgeRank(b);
+      if (rankB !== rankA) return rankB - rankA;
+      return a.distance - b.distance;
     });
-  }, [
-    users, aiCompanions, profileType, 
-    filterOnline, maxDistance, minAge, maxAge,
-    aiMinAge, aiMaxAge, aiPersonality, aiStyle
-  ]);
-  
+  }, [userGender, filterOnline, maxDistance, minAge, maxAge]);
+
+  const exploreMessage = userGender === 'male'
+    ? 'Join a live stream to engage'
+    : userGender === 'female'
+    ? 'Go live, earn gifts from love ones'
+    : null;
+
   const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
   const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
   const areAnyFiltersActive = (profileType === 'human' && areHumanFiltersActive) || (profileType === 'ai' && areAIFiltersActive);
@@ -153,12 +176,18 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ users, aiCompanions, onSele
         </div>
       )}
 
+      {exploreMessage && (
+        <div className="bg-gradient-to-r from-pink-500/20 to-rose-500/20 border border-pink-500/30 rounded-2xl p-4 text-center">
+          <p className="text-sm font-bold text-pink-200">{exploreMessage}</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 pb-24">
-        {displayedProfiles.length > 0 ? (
-          displayedProfiles.map((user) => (
+        {filteredUsers.length > 0 ? (
+          filteredUsers.map((user) => (
             <div 
               key={user.id}
-              onClick={() => user.isLive ? onSelectLive(user) : onSelectUser(user)}
+              onClick={() => (user.isLive && liveStreamingEnabled) ? onSelectLive(user) : onSelectUser(user)}
               className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-zinc-800 shadow-xl group cursor-pointer active:scale-95 transition-transform"
             >
               <img 
@@ -188,6 +217,12 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ users, aiCompanions, onSele
                 </div>
               )}
 
+              {user.badgeTier && user.badgeTier !== 'none' && (
+                <div className="absolute top-2 right-2 text-lg" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
+                  {getBadges().find(b => b.id === user.badgeTier)?.icon}
+                </div>
+              )}
+
               {!user.isLive && !user.isAI && user.isOnline && (
                 <div className="absolute top-2 left-2 w-2 h-2 bg-green-500 rounded-full border border-black shadow-lg"></div>
               )}
@@ -213,6 +248,18 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ users, aiCompanions, onSele
           </div>
         )}
       </div>
+
+      {/* FLOATING GO LIVE BUTTON */}
+      {liveStreamingEnabled && onGoLive && (
+        <button 
+          onClick={onGoLive}
+          className="fixed bottom-24 right-6 w-16 h-16 rounded-full bg-red-600 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)] active:scale-90 transition-all border-4 border-black z-40 group"
+        >
+          <div className="absolute -inset-1 rounded-full bg-red-600/20 animate-ping group-hover:hidden"></div>
+          <span className="text-2xl">📹</span>
+          <span className="text-[8px] font-black tracking-tighter mt-0.5 uppercase">Go Live</span>
+        </button>
+      )}
     </div>
   );
 };

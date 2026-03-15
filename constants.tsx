@@ -1,5 +1,13 @@
+import { User, TokenPackage, Gift, BadgeInfo, MonetizationSettings } from './types';
 
-import { User, TokenPackage, Gift } from './types';
+export const BADGE_TIERS: BadgeInfo[] = [
+  { id: 'none', name: 'No Badge', icon: '', tokenCost: 0, minEarningsToEarn: 0, rank: 0 },
+  { id: 'bronze', name: 'Bronze VIP', icon: '🥉', tokenCost: 50, minEarningsToEarn: 100, rank: 1 },
+  { id: 'silver', name: 'Silver VIP', icon: '🥈', tokenCost: 150, minEarningsToEarn: 500, rank: 2 },
+  { id: 'gold', name: 'Gold VIP', icon: '🥇', tokenCost: 500, minEarningsToEarn: 2000, rank: 3 },
+  { id: 'platinum', name: 'Platinum VIP', icon: '💎', tokenCost: 999, minEarningsToEarn: 5000, rank: 4 },
+  { id: 'diamond', name: 'Diamond VIP', icon: '👑', tokenCost: 2999, minEarningsToEarn: 10000, rank: 5 },
+];
 
 export const MOCK_USERS: User[] = [
   {
@@ -20,7 +28,9 @@ export const MOCK_USERS: User[] = [
       'https://picsum.photos/seed/sarah3/400/400',
       'https://picsum.photos/seed/sarah4/400/400'
     ],
-    earnings: 1250
+    earnings: 1250,
+    badgeTier: 'gold',
+    gender: 'female'
   },
   {
     id: '2',
@@ -36,7 +46,9 @@ export const MOCK_USERS: User[] = [
     album: [
       'https://picsum.photos/seed/alex1/400/400',
       'https://picsum.photos/seed/alex2/400/400'
-    ]
+    ],
+    badgeTier: 'bronze',
+    gender: 'male'
   },
   {
     id: '3',
@@ -55,7 +67,9 @@ export const MOCK_USERS: User[] = [
       'https://picsum.photos/seed/chloe2/400/400',
       'https://picsum.photos/seed/chloe3/400/400'
     ],
-    earnings: 840
+    earnings: 840,
+    badgeTier: 'silver',
+    gender: 'female'
   },
   {
     id: '4',
@@ -71,7 +85,9 @@ export const MOCK_USERS: User[] = [
     album: [
       'https://picsum.photos/seed/elena1/400/400',
       'https://picsum.photos/seed/elena2/400/400'
-    ]
+    ],
+    badgeTier: 'platinum',
+    gender: 'female'
   },
   {
     id: '5',
@@ -88,7 +104,9 @@ export const MOCK_USERS: User[] = [
       'https://picsum.photos/seed/marcus1/400/400',
       'https://picsum.photos/seed/marcus2/400/400',
       'https://picsum.photos/seed/marcus3/400/400'
-    ]
+    ],
+    badgeTier: 'none',
+    gender: 'male'
   },
   {
     id: '6',
@@ -105,7 +123,9 @@ export const MOCK_USERS: User[] = [
     album: [
       'https://picsum.photos/seed/jasmine1/400/400'
     ],
-    earnings: 2100
+    earnings: 2100,
+    badgeTier: 'diamond',
+    gender: 'female'
   },
   {
     id: '7',
@@ -118,7 +138,9 @@ export const MOCK_USERS: User[] = [
     distance: 8,
     isOnline: true,
     isLive: false,
-    album: []
+    album: [],
+    badgeTier: 'silver',
+    gender: 'male'
   },
   {
     id: '8',
@@ -131,7 +153,9 @@ export const MOCK_USERS: User[] = [
     distance: 4,
     isOnline: false,
     isLive: false,
-    album: []
+    album: [],
+    badgeTier: 'none',
+    gender: 'female'
   }
 ];
 
@@ -204,9 +228,23 @@ export const TOKEN_PACKAGES: TokenPackage[] = [
   { id: 'p3', tokens: 1000, price: '$34.99' },
 ];
 
+/** Legacy fallback; app should use getMonetizationSettings() from data.ts. */
 export const TOKEN_COSTS = {
-  VIDEO_CALL_PER_INTERVAL: 5,
-  LIVE_STREAM: 10
+  VIDEO_CALL: 50,
+  LIVE_STREAM: 10,
+};
+
+export const DEFAULT_MONETIZATION_SETTINGS: MonetizationSettings = {
+  starterTokens: 250,
+  liveStreamEntryTokens: 10,
+  videoCallTokens: 50,
+  superLikeTokens: 5,
+  liveStreamingEnabled: true,
+  giftingEnabled: true,
+  videoCallEnabled: true,
+  vipBadgesEnabled: true,
+  creatorCashoutEnabled: true,
+  creatorRevenueSharePercent: 70,
 };
 
 export const GIFTS: Gift[] = [

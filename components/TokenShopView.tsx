@@ -1,12 +1,13 @@
 
 import React from 'react';
-import { TOKEN_PACKAGES } from '../constants';
-
+import { getTokenPackages } from '../data';
 interface TokenShopViewProps {
   currentTokens: number;
-  onPurchase: (amount: number) => void;
+  onPurchase: (tokens: number, packagePriceUsd?: number) => void;
   onBack: () => void;
 }
+
+const parsePriceUsd = (price: string): number => parseFloat(price.replace(/[^0-9.]/g, '')) || 0;
 
 const TokenShopView: React.FC<TokenShopViewProps> = ({ currentTokens, onPurchase, onBack }) => {
   return (
@@ -26,10 +27,10 @@ const TokenShopView: React.FC<TokenShopViewProps> = ({ currentTokens, onPurchase
 
       <div className="space-y-4">
         <h3 className="font-bold text-zinc-500 uppercase text-xs tracking-widest px-2">Top Up Packages</h3>
-        {TOKEN_PACKAGES.map((pkg) => (
+        {getTokenPackages().map((pkg) => (
           <button 
             key={pkg.id}
-            onClick={() => onPurchase(pkg.tokens)}
+            onClick={() => onPurchase(pkg.tokens, parsePriceUsd(pkg.price))}
             className="w-full group bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-5 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98]"
           >
             <div className="flex items-center gap-4">

@@ -1,8 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, User, AppState } from './types';
-import * as db from './services/databaseService';
+import { getUsers, getBadges, getMonetizationSettings } from './data';
+import { adminStore } from './admin/store';
+import { getAppSession, setAppSession, setAppSessionGender, clearAppSession } from './appSession';
 import DiscoverView from './components/DiscoverView';
+import LandingPage from './components/LandingPage';
+import GenderSelectPage from './components/GenderSelectPage';
 import ChatListView from './components/ChatListView';
 import ChatRoomView from './components/ChatRoomView';
 import VideoCallView from './components/VideoCallView';
@@ -14,38 +17,57 @@ import UserDetailView from './components/UserDetailView';
 import HomeMenuView from './components/HomeMenuView';
 import CashOutView from './components/CashOutView';
 
+const DEFAULT_ME: User = {
+  id: 'me',
+  name: 'James',
+  age: 26,
+  bio: 'Lover of tech and design. Looking for someone to explore the world with.',
+  avatar: 'https://picsum.photos/seed/me/200',
+  interests: ['Coding', 'Design', 'Travel'],
+  location: 'New York',
+  distance: 0,
+  isOnline: true,
+  album: ['https://picsum.photos/seed/me1/400/400', 'https://picsum.photos/seed/me2/400/400'],
+  earnings: 0,
+  transferredOut: 0,
+  badgeTier: 'none',
+};
+
 const App: React.FC = () => {
-  const [state, setState] = useState<Partial<AppState>>({
-    tokens: 250,
-    currentView: View.EXPLORE,
-  });
-  const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
-  const [discoverUsers, setDiscoverUsers] = useState<User[]>([]);
-  const [aiCompanions, setAiCompanions] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [appSession, setAppSessionState] = useState<ReturnType<typeof getAppSession>>(getAppSession);
 
   useEffect(() => {
-    const loadInitialData = async () => {
-      setIsLoading(true);
-      try {
-        const [currentUser, matches, usersForDiscovery, companions] = await Promise.all([
-          db.getCurrentUser(),
-          db.getMatches(),
-          db.getDiscoverUsers(),
-          db.getAICompanions(),
-        ]);
-        setState(prev => ({ ...prev, currentUser, matches }));
-        setDiscoverUsers(usersForDiscovery);
-        setAiCompanions(companions);
-      } catch (error) {
-        console.error("Failed to load initial data", error);
-        // Handle error state in UI
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadInitialData();
+    setAppSessionState(getAppSession());
   }, []);
+
+  const handleSignUp = (email: string, _password: string) => {
+    setAppSession({ email });
+    setAppSessionState(getAppSession());
+  };
+
+  const handleGoogleSignUp = () => {
+    setAppSession({ email: 'user@gmail.com' });
+    setAppSessionState(getAppSession());
+  };
+
+  const handleGenderSelect = (gender: 'male' | 'female') => {
+    setAppSessionGender(gender);
+    setAppSessionState(getAppSession());
+  };
+
+  const [state, setState] = useState<AppState>(() => {
+    const users = getUsers();
+    const meUser = users.find((u) => u.id === 'me');
+    const currentUser = meUser ? { ...DEFAULT_ME, ...meUser } : DEFAULT_ME;
+    if (!meUser) adminStore.addUser(currentUser);
+    return {
+      currentUser,
+      tokens: getMonetizationSettings().starterTokens,
+      matches: users.filter((u) => u.id !== 'me').slice(0, 2),
+      currentView: View.EXPLORE,
+    };
+  });
+  const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
 
 
   const setView = (view: View) => {
@@ -65,32 +87,65 @@ const App: React.FC = () => {
   };
 
   const openUserDetail = (user: User) => {
-    setState(prev => ({ ...prev, currentView: View.USER_DETAIL, selectedUserForDetail: user }));
+    setState(prev => ({
+      ...prev,
+      currentView: View.USER_DETAIL,
+      selectedUserForDetail: user,
+      profileReturnView: prev.currentView
+    }));
   };
 
-  const openChat = async (user: User) => {
+  const openChat = (user: User) => {
     const isAlreadyMatched = state.matches?.find(m => m.id === user.id);
-    if (!isAlreadyMatched && !user.isAI) { // Don't add AI to matches list
-      const newMatch = await db.addMatch(user.id);
-      setState(prev => ({ ...prev, matches: [...(prev.matches || []), newMatch] }));
+    if (!isAlreadyMatched && !user.isAI) {
+      setState(prev => ({ ...prev, matches: [...(prev.matches || []), user] }));
     }
     setState(prev => ({ ...prev, currentView: View.CHAT_ROOM, selectedChatPartner: user }));
   };
 
   const openLive = (user: User) => {
-    setState(prev => ({ ...prev, currentView: View.LIVE_STREAM, selectedLiveHost: user }));
+    const others = getUsers().filter(u => u.id !== user.id).slice(0, 4);
+    setState(prev => ({
+      ...prev,
+      currentView: View.LIVE_STREAM,
+      selectedLiveHost: user,
+      liveStreamParticipants: [user, ...others]
+    }));
   };
 
-  const handleUpdateAlbum = async (newAlbum: string[]) => {
+  const handleUpdateAlbum = (newAlbum: string[]) => {
     if (!state.currentUser) return;
-    const updatedUser = await db.updateUserAlbum(state.currentUser.id, newAlbum);
-    setState(prev => ({...prev, currentUser: updatedUser }));
+    adminStore.updateUser(state.currentUser.id, { album: newAlbum });
+    setState(prev => ({ ...prev, currentUser: { ...prev.currentUser, album: newAlbum } }));
   };
   
-  const handleUpdateAvatar = async (newAvatarUrl: string) => {
+  const handleUpdateAvatar = (newAvatarUrl: string) => {
     if (!state.currentUser) return;
-    const updatedUser = await db.updateUserAvatar(state.currentUser.id, newAvatarUrl);
-    setState(prev => ({...prev, currentUser: updatedUser }));
+    adminStore.updateUser(state.currentUser.id, { avatar: newAvatarUrl });
+    setState(prev => ({ ...prev, currentUser: { ...prev.currentUser, avatar: newAvatarUrl } }));
+  };
+
+  const handleUpdateProfile = (updates: Partial<User>) => {
+    setState(prev => ({
+      ...prev,
+      currentUser: { ...prev.currentUser, ...updates }
+    }));
+    adminStore.updateUser('me', updates);
+  };
+
+  const handlePurchaseBadge = (tier: import('./types').BadgeTier): boolean => {
+    const badge = getBadges().find((b) => b.id === tier);
+    if (!badge || badge.tokenCost === 0) return false;
+    if (state.tokens >= badge.tokenCost) {
+      setState(prev => ({
+        ...prev,
+        tokens: prev.tokens - badge.tokenCost,
+        currentUser: { ...prev.currentUser, badgeTier: tier }
+      }));
+      return true;
+    }
+    setView(View.TOKEN_SHOP);
+    return false;
   };
 
   const deductTokens = (amount: number): boolean => {
@@ -102,23 +157,33 @@ const App: React.FC = () => {
     return false;
   };
 
-  const addTokens = (amount: number) => {
-    setState(prev => ({ ...prev, tokens: (prev.tokens || 0) + amount }));
+  const addTokens = (amount: number, priceUsd?: number) => {
+    setState(prev => ({ ...prev, tokens: prev.tokens + amount }));
+    if (priceUsd != null && priceUsd > 0) {
+      adminStore.addPlatformRevenueFromTokenSales(priceUsd);
+    }
   };
 
-  const addEarnings = async (amount: number) => {
-    if (!state.currentUser) return;
-    const updatedUser = await db.updateUserEarnings(state.currentUser.id, amount);
-    setState(prev => ({...prev, currentUser: updatedUser }));
+  const addEarnings = (amount: number) => {
+    setState(prev => {
+      const newEarnings = (prev.currentUser.earnings || 0) + amount;
+      adminStore.updateUser('me', { earnings: newEarnings });
+      return { ...prev, currentUser: { ...prev.currentUser, earnings: newEarnings } };
+    });
   };
   
-  const handleCashOut = async (amount: number) => {
+  const handleCashOut = (amount: number) => {
     if (!state.currentUser) return;
-    const updatedUser = await db.performCashOut(state.currentUser.id, amount);
-    setState(prev => ({ ...prev, currentUser: updatedUser }));
+    const newEarnings = (state.currentUser.earnings ?? 0) - amount;
+    const newTransferredOut = (state.currentUser.transferredOut ?? 0) + amount;
+    adminStore.updateUser('me', { earnings: newEarnings, transferredOut: newTransferredOut });
+    setState(prev => ({
+      ...prev,
+      currentUser: { ...prev.currentUser, earnings: newEarnings, transferredOut: newTransferredOut }
+    }));
   };
   
-  if (isLoading || !state.currentUser) {
+  if (!state.currentUser) {
     return (
       <div className="flex flex-col min-h-screen bg-black text-white max-w-md mx-auto items-center justify-center">
         <div className="text-pink-500 text-4xl animate-bounce">❤</div>
@@ -127,10 +192,33 @@ const App: React.FC = () => {
     );
   }
 
+  if (!appSession) {
+    return (
+      <div className="min-h-screen bg-black">
+        <LandingPage onSignUp={handleSignUp} onGoogleSignUp={handleGoogleSignUp} />
+      </div>
+    );
+  }
+
+  if (!appSession.gender) {
+    return (
+      <div className="min-h-screen bg-black">
+        <GenderSelectPage onSelect={handleGenderSelect} />
+      </div>
+    );
+  }
+
   const renderView = () => {
     switch (state.currentView) {
       case View.EXPLORE:
-        return <DiscoverView users={discoverUsers} aiCompanions={aiCompanions} onSelectUser={openUserDetail} onSelectLive={openLive} />;
+        return (
+          <DiscoverView
+            userGender={appSession.gender}
+            onSelectUser={openUserDetail}
+            onSelectLive={openLive}
+            onGoLive={() => setView(View.HOST_LIVE)}
+          />
+        );
       case View.CHATS:
         return <ChatListView matches={state.matches || []} onChatSelect={openChat} />;
       case View.CHAT_ROOM:
@@ -151,21 +239,84 @@ const App: React.FC = () => {
             tokens={state.tokens!}
           />
         ) : null;
-      case View.LIVE_STREAM:
-        return <LiveStreamView host={state.selectedLiveHost!} onEnd={() => setView(View.EXPLORE)} deductTokens={deductTokens} />;
-      case View.HOST_LIVE:
-        return <LiveStreamView isHost host={state.currentUser!} onEnd={() => setView(View.EXPLORE)} deductTokens={deductTokens} onReceiveGift={addEarnings} />;
+      case View.LIVE_STREAM: {
+        const streamHost = state.selectedLiveHost || getUsers()[0];
+        const participants = state.liveStreamParticipants?.length
+          ? state.liveStreamParticipants
+          : [streamHost];
+        return (
+          <LiveStreamView 
+            host={streamHost}
+            participants={participants}
+            onEnd={() => setView(View.EXPLORE)} 
+            deductTokens={deductTokens}
+            onViewProfile={(user) => openUserDetail(user)}
+            onSwitchMain={(user) => {
+              const idx = participants.findIndex(p => p.id === user.id);
+              if (idx >= 0) {
+                const reordered = [participants[idx], ...participants.filter((_, i) => i !== idx)];
+                setState(prev => ({ ...prev, liveStreamParticipants: reordered }));
+              }
+            }}
+          />
+        );
+      }
+      case View.HOST_LIVE: {
+        const hostUser = state.currentUser;
+        const participants = state.liveStreamParticipants?.length
+          ? state.liveStreamParticipants
+          : [hostUser];
+        return (
+          <LiveStreamView 
+            isHost 
+            host={hostUser} 
+            participants={participants}
+            onEnd={() => setState(prev => ({ ...prev, currentView: View.EXPLORE, liveStreamParticipants: undefined }))} 
+            deductTokens={deductTokens} 
+            onReceiveGift={addEarnings}
+            onAddGuest={(user) => {
+              const current = state.liveStreamParticipants || [hostUser];
+              if (current.length < 5 && !current.find(p => p.id === user.id)) {
+                setState(prev => ({
+                  ...prev,
+                  liveStreamParticipants: [...(prev.liveStreamParticipants || [hostUser]), user]
+                }));
+              }
+            }}
+            onSwitchMain={(user) => {
+              const current = state.liveStreamParticipants || [hostUser];
+              const idx = current.findIndex(p => p.id === user.id);
+              if (idx >= 0) {
+                const reordered = [current[idx], ...current.filter((_, i) => i !== idx)];
+                setState(prev => ({ ...prev, liveStreamParticipants: reordered }));
+              }
+            }}
+          />
+        );
+      }
       case View.TOKEN_SHOP:
         return <TokenShopView onBack={() => setView(View.EXPLORE)} currentTokens={state.tokens!} onPurchase={addTokens} />;
       case View.PROFILE:
-        return <ProfileView user={state.currentUser!} tokens={state.tokens!} onGoShop={() => setView(View.TOKEN_SHOP)} onUpdateAlbum={handleUpdateAlbum} onUpdateAvatar={handleUpdateAvatar} />;
+        return (
+          <ProfileView 
+            user={state.currentUser} 
+            tokens={state.tokens} 
+            onGoShop={() => setView(View.TOKEN_SHOP)} 
+            onUpdateAlbum={handleUpdateAlbum}
+            onUpdateProfile={handleUpdateProfile}
+            onPurchaseBadge={handlePurchaseBadge}
+            onLogout={() => { clearAppSession(); setAppSessionState(null); }}
+          />
+        );
       case View.USER_DETAIL:
         return state.selectedUserForDetail ? (
           <UserDetailView 
             user={state.selectedUserForDetail} 
-            onBack={() => setView(View.EXPLORE)} 
+            onBack={() => setView(state.profileReturnView ?? View.EXPLORE)} 
             onChat={openChat} 
-            onLive={openLive} 
+            onLive={openLive}
+            deductTokens={deductTokens}
+            onGoToTokenShop={() => setView(View.TOKEN_SHOP)}
           />
         ) : null;
       case View.CASH_OUT:
@@ -174,7 +325,14 @@ const App: React.FC = () => {
           setIsHomeMenuOpen(true);
         }} onConfirmCashOut={handleCashOut} />;
       default:
-        return <DiscoverView users={discoverUsers} aiCompanions={aiCompanions} onSelectUser={openUserDetail} onSelectLive={openLive} />;
+        return (
+          <DiscoverView
+            userGender={appSession.gender}
+            onSelectUser={openUserDetail}
+            onSelectLive={openLive}
+            onGoLive={() => setView(View.HOST_LIVE)}
+          />
+        );
     }
   };
 
@@ -184,19 +342,7 @@ const App: React.FC = () => {
         {renderView()}
       </main>
       
-      {![View.VIDEO_CALL, View.LIVE_STREAM, View.HOST_LIVE, View.USER_DETAIL, View.CASH_OUT].includes(state.currentView!) && (
-        <Navbar currentView={state.currentView!} setView={setView} tokenCount={state.tokens!} />
-      )}
-
-      <HomeMenuView
-        isOpen={isHomeMenuOpen}
-        onClose={() => setIsHomeMenuOpen(false)}
-        user={state.currentUser!}
-        onGoLive={() => handleMenuAction(View.HOST_LIVE)}
-        onGoShop={() => handleMenuAction(View.TOKEN_SHOP)}
-        onGoProfile={() => handleMenuAction(View.PROFILE)}
-        onGoCashOut={() => handleMenuAction(View.CASH_OUT)}
-      />
+      <Navbar currentView={state.currentView} setView={setView} tokenCount={state.tokens} liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled} />
     </div>
   );
 };

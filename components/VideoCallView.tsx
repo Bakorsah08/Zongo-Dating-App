@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { User } from '../types';
-import { TOKEN_COSTS } from '../constants';
+import { getMonetizationSettings } from '../data';
 import { encode, decode, decodeAudioData } from '../services/geminiService';
 
 interface VideoCallViewProps {
@@ -12,7 +12,8 @@ interface VideoCallViewProps {
   tokens: number;
 }
 
-const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTokens, tokens }) => {
+const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTokens }) => {
+  const videoCallTokens = getMonetizationSettings().videoCallTokens;
   const [isCalling, setIsCalling] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -36,6 +37,11 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
     let active = true;
 
     const startCall = async () => {
+      if (!deductTokens(videoCallTokens)) {
+        onEnd();
+        return;
+      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -305,14 +311,14 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
           <p className="mt-4 font-bold tracking-widest uppercase">Connecting to {partner.name}...</p>
         </div>
       ) : (
-        <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-4">
+        <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-6">
           {error && (
             <div className="bg-red-900/80 text-white backdrop-blur-md px-4 py-2 rounded-full border border-red-500 text-xs font-medium">
               {error}
             </div>
           )}
-          <div className="bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs font-medium">
-            Next charge in <span className="font-bold text-pink-400">{countdown}s</span>
+          <div className="bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs font-medium text-pink-300">
+            {videoCallTokens} tokens spent
           </div>
           <div className="flex items-center gap-6">
             <button 

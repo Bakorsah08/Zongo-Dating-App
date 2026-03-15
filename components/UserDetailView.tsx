@@ -1,16 +1,33 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
+import { getBadges, getMonetizationSettings } from '../data';
 
 interface UserDetailViewProps {
   user: User;
   onBack: () => void;
   onChat: (user: User) => void;
   onLive: (user: User) => void;
+  deductTokens?: (amount: number) => boolean;
+  onGoToTokenShop?: () => void;
 }
 
-const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, onLive }) => {
+const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, onLive, deductTokens, onGoToTokenShop }) => {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  const [superLiked, setSuperLiked] = useState(false);
+  const { superLikeTokens } = getMonetizationSettings();
+
+  const handleSuperLike = () => {
+    if (superLiked) return;
+    if (deductTokens && superLikeTokens > 0) {
+      if (deductTokens(superLikeTokens)) {
+        setSuperLiked(true);
+      } else {
+        onGoToTokenShop?.();
+      }
+    } else {
+      setSuperLiked(true);
+    }
+  };
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -49,10 +66,15 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
       <div className="flex-1 -mt-10 relative z-10 bg-black rounded-t-[40px] px-6 pt-8 pb-32">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-black flex items-center gap-2">
-              {user.name}, {user.age}
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-black">{user.name}, {user.age}</h1>
               {user.isAI && <span className="text-xs font-bold bg-pink-600/80 text-white px-2 py-1 rounded-full border border-white/20">🤖 AI</span>}
-            </h1>
+              {user.badgeTier && user.badgeTier !== 'none' && (
+                <span className="text-2xl" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
+                  {getBadges().find(b => b.id === user.badgeTier)?.icon}
+                </span>
+              )}
+            </div>
             <p className="text-zinc-400 text-sm mt-1">📍 {user.location}</p>
           </div>
           <div className="flex gap-2">
@@ -90,9 +112,14 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
             </button>
           ) : (
             <button 
-              className="bg-zinc-900 border border-zinc-800 text-zinc-300 py-4 rounded-2xl font-black active:scale-95 transition-all"
+              onClick={handleSuperLike}
+              className={`py-4 rounded-2xl font-black active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                superLiked 
+                  ? 'bg-pink-600/30 border border-pink-500/50 text-pink-300' 
+                  : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-pink-500/50'
+              }`}
             >
-              ⭐ Super Like
+              ⭐ {superLiked ? 'Super Liked!' : `Super Like${superLikeTokens > 0 ? ` (💎 ${superLikeTokens})` : ''}`}
             </button>
           )}
         </div>

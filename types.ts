@@ -59,6 +59,7 @@ export interface Message {
 
 export enum View {
   EXPLORE = 'explore',
+  FOLLOWING = 'following', // People I'm following
   CHATS = 'chats',
   CHAT_ROOM = 'chat_room',
   VIDEO_CALL = 'video_call',
@@ -75,6 +76,7 @@ export interface AppState {
   currentUser: User;
   tokens: number;
   matches: User[];
+  followingIds: string[]; // User IDs the current user is following
   currentView: View;
   selectedChatPartner?: User;
   selectedLiveHost?: User;

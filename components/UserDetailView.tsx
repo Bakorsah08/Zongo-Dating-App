@@ -9,9 +9,11 @@ interface UserDetailViewProps {
   onLive: (user: User) => void;
   deductTokens?: (amount: number) => boolean;
   onGoToTokenShop?: () => void;
+  isFollowing?: boolean;
+  onFollowToggle?: () => void;
 }
 
-const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, onLive, deductTokens, onGoToTokenShop }) => {
+const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, onLive, deductTokens, onGoToTokenShop, isFollowing = false, onFollowToggle }) => {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [superLiked, setSuperLiked] = useState(false);
   const { superLikeTokens } = getMonetizationSettings();
@@ -55,11 +57,31 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
         >
           ←
         </button>
-        {user.isLive && (
-          <div className="absolute top-6 right-6 bg-red-600 px-3 py-1 rounded-full text-xs font-black animate-pulse shadow-lg">
-            LIVE
-          </div>
-        )}
+        <div className="absolute top-6 right-6 flex items-center gap-2">
+          {onFollowToggle && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onFollowToggle(); }}
+              className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 text-white hover:bg-black/60 transition-colors"
+              aria-label={isFollowing ? 'Unfollow' : 'Follow'}
+            >
+              {isFollowing ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-pink-400">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+              )}
+            </button>
+          )}
+          {user.isLive && (
+            <div className="bg-red-600 px-3 py-1 rounded-full text-xs font-black animate-pulse shadow-lg">
+              LIVE
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Profile Content */}

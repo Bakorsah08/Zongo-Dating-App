@@ -64,6 +64,7 @@ const App: React.FC = () => {
       currentUser,
       tokens: getMonetizationSettings().starterTokens,
       matches: users.filter((u) => u.id !== 'me').slice(0, 2),
+      followingIds: [],
       currentView: View.EXPLORE,
     };
   });
@@ -99,6 +100,15 @@ const App: React.FC = () => {
       currentView: View.USER_DETAIL,
       selectedUserForDetail: user,
       profileReturnView: prev.currentView
+    }));
+  };
+
+  const toggleFollow = (userId: string) => {
+    setState(prev => ({
+      ...prev,
+      followingIds: prev.followingIds.includes(userId)
+        ? prev.followingIds.filter(id => id !== userId)
+        : [...prev.followingIds, userId]
     }));
   };
 
@@ -211,8 +221,10 @@ const App: React.FC = () => {
 
   if (!appSession.gender) {
     return (
-      <div className="min-h-screen bg-black">
-        <GenderSelectPage onSelect={handleGenderSelect} />
+      <div className="min-h-screen bg-black flex justify-center">
+        <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
+          <GenderSelectPage onSelect={handleGenderSelect} />
+        </div>
       </div>
     );
   }
@@ -228,6 +240,63 @@ const App: React.FC = () => {
             onGoLive={() => setView(View.HOST_LIVE)}
           />
         );
+      case View.FOLLOWING: {
+        const followingUsers = getUsers().filter(u => state.followingIds.includes(u.id));
+        const badges = getBadges();
+        return (
+          <div className="min-h-full bg-white pb-24">
+            <div className="px-4 pt-6 pb-4">
+              <h1 className="text-xl font-bold text-zinc-900">People I&apos;m Following</h1>
+            </div>
+            {followingUsers.length > 0 ? (
+              <div className="grid grid-cols-2 gap-0 w-full">
+                {followingUsers.map((user) => (
+                  <div
+                    key={user.id}
+                    onClick={() => openUserDetail(user)}
+                    className="relative aspect-[3/4] overflow-hidden group cursor-pointer active:scale-[0.99] transition-transform"
+                  >
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                    {user.isAI && (
+                      <span className="absolute top-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-semibold text-white">
+                        <span className="text-xs">🤖</span> AI
+                      </span>
+                    )}
+                    {user.isLive && (
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-red-500/90 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-white animate-pulse">
+                        <span className="w-1.5 h-1.5 bg-white rounded-full" /> LIVE
+                      </div>
+                    )}
+                    {!user.isAI && !user.isLive && (
+                      <span className="absolute top-2 left-2 bg-white/25 backdrop-blur-md px-2 py-1 rounded-full text-[10px] font-semibold text-white shadow-sm">
+                        {user.interests?.[0] || 'New'}
+                      </span>
+                    )}
+                    {user.badgeTier && user.badgeTier !== 'none' && (
+                      <div className="absolute top-2 right-2 text-[22px] drop-shadow-md" title={badges.find(b => b.id === user.badgeTier)?.name}>
+                        {badges.find(b => b.id === user.badgeTier)?.icon}
+                      </div>
+                    )}
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <h3 className="text-[1.3125rem] font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
+                      <p className="text-[10px] text-white/90 truncate drop-shadow-md mt-0.5">
+                        {user.isAI ? 'AI Companion' : (user.isLive ? 'Tap to watch live' : `${user.distance} miles away`)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="px-4 text-sm text-zinc-500 mt-2">When you follow someone, they&apos;ll appear here.</p>
+            )}
+          </div>
+        );
+      }
       case View.CHATS:
         return <ChatListView matches={state.matches || []} onChatSelect={openChat} />;
       case View.CHAT_ROOM:
@@ -326,6 +395,8 @@ const App: React.FC = () => {
             onLive={openLive}
             deductTokens={deductTokens}
             onGoToTokenShop={() => setView(View.TOKEN_SHOP)}
+            isFollowing={state.followingIds.includes(state.selectedUserForDetail.id)}
+            onFollowToggle={() => toggleFollow(state.selectedUserForDetail!.id)}
           />
         ) : null;
       case View.CASH_OUT:

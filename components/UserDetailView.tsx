@@ -89,7 +89,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
         <div className="flex items-center justify-between mb-6">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-black">{user.name}, {user.age}</h1>
+              <h1 className="text-3xl font-black text-white">{user.name}, {user.age}</h1>
               {user.isAI && <span className="text-xs font-bold bg-pink-600/80 text-white px-2 py-1 rounded-full border border-white/20">🤖 AI</span>}
               {user.badgeTier && user.badgeTier !== 'none' && (
                 <span className="text-2xl" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
@@ -99,9 +99,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
             </div>
             <p className="text-zinc-400 text-sm mt-1">📍 {user.location}</p>
           </div>
-          <div className="flex gap-2">
-            <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-xl">✨</div>
-          </div>
+          <div className="flex gap-2"></div>
         </div>
 
         {/* Action Buttons */}

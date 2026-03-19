@@ -35,6 +35,8 @@ const DEFAULT_ME: User = {
 
 const App: React.FC = () => {
   const [appSession, setAppSessionState] = useState<ReturnType<typeof getAppSession>>(getAppSession);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [scrollEndTimer, setScrollEndTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setAppSessionState(getAppSession());
@@ -69,10 +71,8 @@ const App: React.FC = () => {
     };
   });
   const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
-  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   const setView = (view: View) => {
-    setShowAccountMenu(false);
     if (view === View.HOME) {
       setIsHomeMenuOpen(true);
     } else {
@@ -82,7 +82,6 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    setShowAccountMenu(false);
     clearAppSession();
     setAppSessionState(null);
   };
@@ -199,10 +198,17 @@ const App: React.FC = () => {
       currentUser: { ...prev.currentUser, earnings: newEarnings, transferredOut: newTransferredOut }
     }));
   };
+
+  const handleMainScroll = () => {
+    setIsScrolling(true);
+    if (scrollEndTimer) clearTimeout(scrollEndTimer);
+    const timer = setTimeout(() => setIsScrolling(false), 180);
+    setScrollEndTimer(timer);
+  };
   
   if (!state.currentUser) {
     return (
-      <div className="flex flex-col min-h-screen bg-black text-white max-w-md mx-auto items-center justify-center">
+      <div className="flex flex-col min-h-screen bg-white text-zinc-900 max-w-md mx-auto items-center justify-center">
         <div className="text-pink-500 text-4xl animate-bounce">❤</div>
         <p className="mt-4 font-bold tracking-widest uppercase">Loading Profile...</p>
       </div>
@@ -211,7 +217,7 @@ const App: React.FC = () => {
 
   if (!appSession) {
     return (
-      <div className="min-h-screen bg-black flex justify-center">
+      <div className="min-h-screen bg-white flex justify-center">
         <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
           <LandingPage onSignUp={handleSignUp} onGoogleSignUp={handleGoogleSignUp} />
         </div>
@@ -221,13 +227,15 @@ const App: React.FC = () => {
 
   if (!appSession.gender) {
     return (
-      <div className="min-h-screen bg-black flex justify-center">
+      <div className="min-h-screen bg-white flex justify-center">
         <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
           <GenderSelectPage onSelect={handleGenderSelect} />
         </div>
       </div>
     );
   }
+
+  const isLiveView = state.currentView === View.LIVE_STREAM || state.currentView === View.HOST_LIVE;
 
   const renderView = () => {
     switch (state.currentView) {
@@ -283,7 +291,7 @@ const App: React.FC = () => {
                       </div>
                     )}
                     <div className="absolute bottom-3 left-3 right-3">
-                      <h3 className="text-[1.3125rem] font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
+                      <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
                       <p className="text-[10px] text-white/90 truncate drop-shadow-md mt-0.5">
                         {user.isAI ? 'AI Companion' : (user.isLive ? 'Tap to watch live' : `${user.distance} miles away`)}
                       </p>
@@ -417,45 +425,21 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-black text-white max-w-md mx-auto relative border-x border-zinc-800 shadow-2xl overflow-hidden">
-      {/* Top bar: account menu (Profile + Log out) so you can log out without opening Profile tab */}
-      <div className="fixed top-0 left-0 right-0 max-w-md mx-auto z-[70] flex justify-end items-center h-14 px-4 bg-black/80 backdrop-blur-sm border-b border-zinc-800">
-        <button
-          type="button"
-          onClick={() => setShowAccountMenu((open) => !open)}
-          className="w-10 h-10 rounded-full flex items-center justify-center border border-zinc-700 text-zinc-300 hover:bg-zinc-800/80 hover:text-white transition-colors"
-          aria-label="Account menu"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-        </button>
-        {showAccountMenu && (
-          <>
-            <div className="fixed inset-0 z-[69]" aria-hidden onClick={() => setShowAccountMenu(false)} />
-            <div className="absolute top-full right-4 mt-2 w-48 py-2 rounded-xl bg-zinc-900 border border-zinc-700 shadow-xl z-[71]">
-              <button
-                type="button"
-                onClick={() => { setView(View.PROFILE); setShowAccountMenu(false); }}
-                className="w-full text-left px-4 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800 hover:text-white transition-colors flex items-center gap-3"
-              >
-                <span className="text-lg">👤</span> Profile
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full text-left px-4 py-3 text-sm font-medium text-red-400 hover:bg-zinc-800 hover:text-red-300 transition-colors flex items-center gap-3"
-              >
-                <span className="text-lg">🚪</span> Log out
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      <main className="flex-1 overflow-y-auto pb-20 pt-14">
+    <div className="flex flex-col min-h-screen bg-white text-zinc-900 max-w-md mx-auto relative border-x border-zinc-200 shadow-2xl overflow-hidden">
+      <main
+        className={`flex-1 ${isLiveView ? 'relative min-h-[100dvh] h-[100dvh] overflow-hidden' : 'overflow-y-auto pb-28'}`}
+        onScroll={handleMainScroll}
+      >
         {renderView()}
       </main>
 
-      <Navbar currentView={state.currentView} setView={setView} tokenCount={state.tokens} liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled} />
+      <Navbar
+        currentView={state.currentView}
+        setView={setView}
+        tokenCount={state.tokens}
+        liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled}
+        hidden={isScrolling || isLiveView}
+      />
     </div>
   );
 };

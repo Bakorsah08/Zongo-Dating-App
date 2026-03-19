@@ -9,6 +9,9 @@ interface DiscoverViewProps {
   onGoLive?: () => void;
 }
 
+const AI_PERSONALITIES = ['Any', 'Romantic', 'Playful', 'Calm', 'Intellectual'];
+const AI_STYLES = ['Any', 'Casual', 'Elegant', 'Streetwear', 'Sporty'];
+
 const getBadgeRank = (user: User): number => {
   const tier = user.badgeTier || 'none';
   return getBadges().find(b => b.id === tier)?.rank ?? 0;
@@ -17,6 +20,7 @@ const getBadgeRank = (user: User): number => {
 const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, onSelectLive, onGoLive }) => {
   const liveStreamingEnabled = getMonetizationSettings().liveStreamingEnabled;
   const [showFilters, setShowFilters] = useState(false);
+  const [activeTextFilter, setActiveTextFilter] = useState<'recommend' | 'newcomer' | 'nearby' | 'live'>('recommend');
   
   // Filter states
   const [profileType, setProfileType] = useState<'human' | 'ai'>('human');
@@ -34,7 +38,8 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
   const [aiStyle, setAiStyle] = useState('Any');
 
   const filteredUsers = useMemo(() => {
-    let filtered = getUsers()
+    const allUsers = getUsers();
+    let filtered = allUsers
       .filter(user => user.id !== 'me') // Exclude current user
       .filter(user => {
         const matchesOnline = filterOnline === 'all' || user.isOnline;
@@ -59,14 +64,30 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
       }
     }
 
-    // Sort by VIP badge rank (higher first), then by distance
+    if (activeTextFilter === 'live') {
+      return filtered
+        .filter(u => u.isLive)
+        .sort((a, b) => (b.viewerCount ?? 0) - (a.viewerCount ?? 0));
+    }
+
+    if (activeTextFilter === 'nearby') {
+      return [...filtered].sort((a, b) => a.distance - b.distance);
+    }
+
+    if (activeTextFilter === 'newcomer') {
+      const indexById = new Map(allUsers.map((u, i) => [u.id, i]));
+      // Newest assumed to be the most recently inserted (towards end of array)
+      return [...filtered].sort((a, b) => (indexById.get(b.id) ?? 0) - (indexById.get(a.id) ?? 0));
+    }
+
+    // Recommend: VIP rank first, then by distance
     return [...filtered].sort((a, b) => {
       const rankA = getBadgeRank(a);
       const rankB = getBadgeRank(b);
       if (rankB !== rankA) return rankB - rankA;
       return a.distance - b.distance;
     });
-  }, [userGender, filterOnline, maxDistance, minAge, maxAge]);
+  }, [userGender, filterOnline, maxDistance, minAge, maxAge, activeTextFilter]);
 
   const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
   const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
@@ -78,13 +99,60 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
         <h1 className="text-2xl font-black text-black tracking-tight">Explore Your World</h1>
         <button 
           onClick={() => setShowFilters(!showFilters)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all shadow-lg ${
+          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
             showFilters || areAnyFiltersActive
-            ? 'bg-pink-600 border-pink-500 text-white' 
-            : 'bg-zinc-200 border-zinc-300 text-zinc-700'
+            ? 'bg-white text-pink-600' 
+            : 'bg-white text-zinc-700'
           }`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+        </button>
+      </div>
+
+      <div className="px-4 pb-2 flex items-center gap-5 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTextFilter('recommend')}
+          className={`whitespace-nowrap transition-all ${
+            activeTextFilter === 'recommend'
+              ? 'font-extrabold text-xs text-zinc-900'
+              : 'font-medium text-[10.5px] text-zinc-500'
+          }`}
+        >
+          Recommend
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTextFilter('newcomer')}
+          className={`whitespace-nowrap transition-all ${
+            activeTextFilter === 'newcomer'
+              ? 'font-extrabold text-xs text-zinc-900'
+              : 'font-medium text-[10.5px] text-zinc-500'
+          }`}
+        >
+          Newcomer
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTextFilter('nearby')}
+          className={`whitespace-nowrap transition-all ${
+            activeTextFilter === 'nearby'
+              ? 'font-extrabold text-xs text-zinc-900'
+              : 'font-medium text-[10.5px] text-zinc-500'
+          }`}
+        >
+          Nearby
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTextFilter('live')}
+          className={`whitespace-nowrap transition-all ${
+            activeTextFilter === 'live'
+              ? 'font-extrabold text-xs text-zinc-900'
+              : 'font-medium text-[10.5px] text-zinc-500'
+          }`}
+        >
+          Live
         </button>
       </div>
 
@@ -208,14 +276,10 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
                 </div>
               )}
 
-              {!user.isLive && !user.isAI && user.isOnline && (
-                <div className="absolute top-2 left-2 w-2 h-2 bg-green-500 rounded-full border border-black shadow-lg"></div>
-              )}
-
               <div className="absolute bottom-3 left-3 right-3">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-[1.3125rem] font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
-                  {user.isOnline && !user.isLive && !user.isAI && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
+                  <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
+                  {user.isOnline && !user.isLive && !user.isAI && <span className="w-3 h-3 bg-green-500 rounded-full"></span>}
                 </div>
                 <p className="text-[10px] text-zinc-300 truncate drop-shadow-md">
                   {user.isAI ? "AI Companion" : (user.isLive ? 'Tap to watch live' : `${user.distance} miles away`)}
@@ -234,17 +298,6 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
         )}
       </div>
 
-      {/* FLOATING GO LIVE BUTTON */}
-      {liveStreamingEnabled && onGoLive && (
-        <button 
-          onClick={onGoLive}
-          className="fixed bottom-24 right-6 w-16 h-16 rounded-full bg-red-600 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)] active:scale-90 transition-all border-4 border-black z-40 group"
-        >
-          <div className="absolute -inset-1 rounded-full bg-red-600/20 animate-ping group-hover:hidden"></div>
-          <span className="text-2xl">📹</span>
-          <span className="text-[8px] font-black tracking-tighter mt-0.5 uppercase">Go Live</span>
-        </button>
-      )}
     </div>
   );
 };

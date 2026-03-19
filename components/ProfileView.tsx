@@ -1,6 +1,5 @@
 
 import React, { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { User, BadgeTier, PayoutDetails } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
 
@@ -29,6 +28,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [isPhotoSelectorOpen, setIsPhotoSelectorOpen] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
   const [bioDraft, setBioDraft] = useState(user.bio);
   const [editingBasic, setEditingBasic] = useState(false);
@@ -135,7 +135,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const [withdrawAmount, setWithdrawAmount] = useState('');
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-h-full bg-black text-white">
       <div className="flex flex-col items-center gap-4 mb-8">
         <div className="relative">
           <img src={user.avatar} className="w-32 h-32 rounded-full border-4 border-zinc-800 shadow-2xl object-cover" />
@@ -390,9 +390,13 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           Log Out
         </button>
 
-        <Link to="/admin" className="block w-full py-3 text-center text-zinc-500 hover:text-zinc-400 text-xs font-medium">
+        <button
+          type="button"
+          onClick={() => { window.location.href = '/admin'; }}
+          className="block w-full py-3 text-center text-zinc-500 hover:text-zinc-400 text-xs font-medium"
+        >
           Admin Dashboard →
-        </Link>
+        </button>
       </div>
       
       {/* Album Photo Selector Modal */}

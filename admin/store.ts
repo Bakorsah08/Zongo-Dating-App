@@ -24,6 +24,8 @@ function loadFromStorage(): AdminData | null {
     const data = JSON.parse(raw) as AdminData;
     if (!data.monetizationSettings) {
       data.monetizationSettings = { ...DEFAULT_MONETIZATION_SETTINGS };
+    } else {
+      data.monetizationSettings = { ...DEFAULT_MONETIZATION_SETTINGS, ...data.monetizationSettings };
     }
     if (typeof data.platformRevenueFromTokenSales !== 'number') {
       data.platformRevenueFromTokenSales = 0;

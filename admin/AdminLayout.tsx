@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { adminStore } from './store';
 import { useAuthContext } from '../auth/AuthContext';
 import type { Permission } from '../auth/types';
+import { backButtonClassName, BackChevron } from '../components/BackButton';
 
 const navItems: { path: string; label: string; icon: string; permission: Permission }[] = [
   { path: '/admin', label: 'Dashboard', icon: '📊', permission: 'view_dashboard' },
@@ -32,8 +33,10 @@ const AdminLayout: React.FC = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col">
         <div className="p-6 border-b border-zinc-800">
-          <Link to="/" className="text-zinc-400 hover:text-white text-xs">← Back to App</Link>
-          <h1 className="text-xl font-black mt-2 bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
+          <Link to="/" aria-label="Back to app" className={`${backButtonClassName} mb-3`}>
+            <BackChevron />
+          </Link>
+          <h1 className="text-xl font-black bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
             Zongo Admin
           </h1>
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Super Admin Dashboard</p>

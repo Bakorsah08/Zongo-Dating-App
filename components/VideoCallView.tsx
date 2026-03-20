@@ -4,6 +4,46 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { User } from '../types';
 import { getMonetizationSettings } from '../data';
 import { encode, decode, decodeAudioData } from '../services/geminiService';
+import BackButton from './BackButton';
+
+/** Line-art video camera: rounded body, play mark, trapezoid lens (matches product reference). */
+function VideoCamPlayIcon({ className, videoOff }: { className?: string; videoOff?: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <g
+        stroke="currentColor"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="7.5" width="10" height="9" rx="2.25" ry="2.25" />
+        <path d="M 6.2 10.75 L 6.2 13.25 L 9.05 12 Z" />
+        <path d="M 13 8.75 L 21 6.25 V 17.75 L 13 15.25 Z" />
+        {videoOff ? <path d="M2.75 2.75 21.25 21.25" /> : null}
+      </g>
+    </svg>
+  );
+}
+
+/** Classic studio mic: vertical pill capsule, U cradle, stem, flat base (stroke style). */
+function MicStrokeIcon({ className, muted }: { className?: string; muted?: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <g
+        stroke="currentColor"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="9" y="4.75" width="6" height="10" rx="3" ry="3" />
+        <path d="M 7.25 11.25 C 7.25 16.85 16.75 16.85 16.75 11.25" />
+        <path d="M 12 16.6 V 19.75" />
+        <path d="M 8.25 19.75 H 15.75" />
+        {muted ? <path d="M 2.75 2.75 21.25 21.25" /> : null}
+      </g>
+    </svg>
+  );
+}
 
 interface VideoCallViewProps {
   partner: User;
@@ -12,15 +52,14 @@ interface VideoCallViewProps {
   tokens: number;
 }
 
-const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTokens }) => {
-  const videoCallTokens = getMonetizationSettings().videoCallTokens;
+const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTokens, tokens }) => {
+  const { videoCallTokens } = getMonetizationSettings();
   const [isCalling, setIsCalling] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [countdown, setCountdown] = useState(10);
-  const [showDeduction, setShowDeduction] = useState(false);
-  
+
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null); // Ref for AI partner video
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -220,15 +259,13 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
       billingIntervalRef.current = window.setInterval(() => {
         setCountdown(prev => {
           if (prev <= 1) {
-            if (deductTokens(TOKEN_COSTS.VIDEO_CALL_PER_INTERVAL)) {
-              setShowDeduction(true);
-              setTimeout(() => setShowDeduction(false), 1200);
+            const intervalCost = getMonetizationSettings().videoCallPerIntervalTokens;
+            if (intervalCost <= 0 || deductTokens(intervalCost)) {
               return 10;
-            } else {
-              setError("Call ended due to insufficient tokens.");
-              setTimeout(onEnd, 2000);
-              return 0;
             }
+            setError("Call ended due to insufficient tokens.");
+            setTimeout(onEnd, 2000);
+            return 0;
           }
           return prev - 1;
         });
@@ -241,11 +278,11 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
 
   if (error && isCalling) { // Show error screen only if call failed to connect
     return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-black">
+      <div className="relative h-full flex flex-col items-center justify-center p-8 text-center bg-black">
+        <BackButton onClick={onEnd} className="absolute top-6 left-6" aria-label="Back to Chat" />
         <div className="text-4xl mb-4">⚠️</div>
         <h2 className="text-xl font-bold mb-2">Something went wrong</h2>
-        <p className="text-zinc-500 mb-6">{error}</p>
-        <button onClick={onEnd} className="bg-white text-black px-6 py-2 rounded-full font-bold">Back to Chat</button>
+        <p className="text-zinc-500">{error}</p>
       </div>
     );
   }
@@ -291,15 +328,11 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
         {isVideoOff && <div className="absolute inset-0 bg-black flex items-center justify-center text-3xl">🚫</div>}
       </div>
       
-      {/* Token Balance */}
-      <div className="absolute top-5 left-5 flex items-center gap-2">
-        <div className="relative bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-sm font-bold flex items-center gap-2">
+      {/* Back + token balance */}
+      <div className="absolute top-5 left-5 z-30 flex items-center gap-2">
+        <BackButton onClick={onEnd} aria-label="End call and go back" />
+        <div className="relative bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-sm font-bold text-white flex items-center gap-2 tabular-nums">
           💎 <span>{tokens}</span>
-          {showDeduction && (
-            <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-red-500 font-black text-sm animate-token-deduct">
-              -{TOKEN_COSTS.VIDEO_CALL_PER_INTERVAL}
-            </span>
-          )}
         </div>
       </div>
 
@@ -317,31 +350,41 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
               {error}
             </div>
           )}
-          <div className="bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs font-medium text-pink-300">
-            {videoCallTokens} tokens spent
-          </div>
           <div className="flex items-center gap-6">
-            <button 
+            <button
+              type="button"
               onClick={() => setIsMuted(!isMuted)}
-              className={`w-14 h-14 rounded-full flex items-center justify-center text-xl transition-all ${
+              aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
                 isMuted ? 'bg-red-500 text-white' : 'bg-white/20 text-white backdrop-blur-md'
               }`}
             >
-              {isMuted ? '🔇' : '🎤'}
+              <MicStrokeIcon className="w-7 h-7" muted={isMuted} />
             </button>
-            <button 
+            <button
+              type="button"
               onClick={onEnd}
-              className="w-20 h-20 rounded-full bg-red-600 flex items-center justify-center text-3xl shadow-2xl shadow-red-900/50 hover:scale-105 active:scale-90 transition-all"
+              aria-label="End call"
+              className="w-20 h-20 rounded-full bg-white border-0 flex items-center justify-center text-red-600 shadow-lg shadow-black/25 hover:scale-105 active:scale-90 transition-all"
             >
-              📞
+              <svg
+                className="w-9 h-9"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden
+              >
+                <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.7l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" transform="rotate(135 12 12)" />
+              </svg>
             </button>
-            <button 
+            <button
+              type="button"
               onClick={() => setIsVideoOff(!isVideoOff)}
-              className={`w-14 h-14 rounded-full flex items-center justify-center text-xl transition-all ${
-                isVideoOff ? 'bg-zinc-800 text-white' : 'bg-white/20 text-white backdrop-blur-md'
+              aria-label={isVideoOff ? 'Turn camera on' : 'Turn camera off'}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
+                isVideoOff ? 'bg-red-500 text-white' : 'bg-white/20 text-white backdrop-blur-md'
               }`}
             >
-              {isVideoOff ? '🚫' : '📹'}
+              <VideoCamPlayIcon className="w-7 h-7" videoOff={isVideoOff} />
             </button>
           </div>
         </div>

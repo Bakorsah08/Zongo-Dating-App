@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import BackButton from './BackButton';
 
 interface CashOutViewProps {
   earnings: number;
@@ -51,9 +52,9 @@ const CashOutView: React.FC<CashOutViewProps> = ({ earnings, onBack, onConfirmCa
   return (
     <div className="p-6 bg-zinc-950 min-h-screen">
       <div className="flex items-center justify-between mb-8">
-        <button onClick={onBack} className="text-zinc-400">← Back</button>
+        <BackButton onClick={onBack} />
         <h1 className="text-xl font-bold">Cash Out</h1>
-        <div className="w-14"></div>
+        <div className="w-10" aria-hidden />
       </div>
 
       <div className="bg-gradient-to-br from-zinc-900 to-black p-8 rounded-3xl border border-zinc-800 text-center mb-10 shadow-2xl">

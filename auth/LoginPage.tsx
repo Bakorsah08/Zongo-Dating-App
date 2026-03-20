@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
+import { backButtonClassName, BackChevron } from '../components/BackButton';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -82,9 +83,11 @@ const LoginPage: React.FC = () => {
         <p className="text-center text-zinc-600 text-xs mt-6">
           Default: admin@zongo.com / admin123
         </p>
-        <Link to="/" className="block text-center text-zinc-500 hover:text-white text-sm mt-4">
-          ← Back to app
-        </Link>
+        <div className="flex justify-center mt-6">
+          <Link to="/" aria-label="Back to app" className={backButtonClassName}>
+            <BackChevron />
+          </Link>
+        </div>
       </div>
     </div>
   );

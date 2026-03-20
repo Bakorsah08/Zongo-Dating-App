@@ -52,12 +52,22 @@ const MonetizationPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-zinc-500 text-sm mb-1">Video call (tokens)</label>
+              <label className="block text-zinc-500 text-sm mb-1">Video call — connection (tokens)</label>
               <input
                 type="number"
                 min={0}
                 value={settings.videoCallTokens}
                 onChange={(e) => handleSave({ videoCallTokens: parseInt(e.target.value) || 0 })}
+                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-zinc-500 text-sm mb-1">Video call — per ~10s while connected</label>
+              <input
+                type="number"
+                min={0}
+                value={settings.videoCallPerIntervalTokens}
+                onChange={(e) => handleSave({ videoCallPerIntervalTokens: parseInt(e.target.value) || 0 })}
                 className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
               />
             </div>

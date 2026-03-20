@@ -238,6 +238,7 @@ export const DEFAULT_MONETIZATION_SETTINGS: MonetizationSettings = {
   starterTokens: 250,
   liveStreamEntryTokens: 10,
   videoCallTokens: 50,
+  videoCallPerIntervalTokens: 10,
   superLikeTokens: 5,
   liveStreamingEnabled: true,
   giftingEnabled: true,

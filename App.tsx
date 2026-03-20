@@ -77,7 +77,17 @@ const App: React.FC = () => {
       setIsHomeMenuOpen(true);
     } else {
       setIsHomeMenuOpen(false); // Always close menu when navigating
-      setState(prev => ({ ...prev, currentView: view }));
+      setState((prev) => {
+        const next: Partial<AppState> = { currentView: view };
+        // Fresh host session: stale participants from watching someone else's live
+        // made mainUser !== you, so camera never turned on.
+        if (view === View.HOST_LIVE && prev.currentUser) {
+          next.liveStreamParticipants = [prev.currentUser];
+          next.selectedLiveHost = undefined;
+          next.liveHostBroadcastMedia = { micOn: true, camOn: true };
+        }
+        return { ...prev, ...next };
+      });
     }
   };
 
@@ -236,6 +246,9 @@ const App: React.FC = () => {
   }
 
   const isLiveView = state.currentView === View.LIVE_STREAM || state.currentView === View.HOST_LIVE;
+  const isChatRoom = state.currentView === View.CHAT_ROOM;
+  const isVideoCall = state.currentView === View.VIDEO_CALL;
+  const fullBleedMain = isLiveView || isChatRoom || isVideoCall;
 
   const renderView = () => {
     switch (state.currentView) {
@@ -313,7 +326,13 @@ const App: React.FC = () => {
             partner={state.selectedChatPartner} 
             onBack={() => setView(View.CHATS)}
             onVideoCall={() => setView(View.VIDEO_CALL)}
+            onAudioCall={() => {
+              const cost = getMonetizationSettings().videoCallTokens;
+              if (!deductTokens(cost)) return;
+              window.alert(`Calling ${state.selectedChatPartner!.name} — audio…`);
+            }}
             onViewProfile={() => openUserDetail(state.selectedChatPartner!)}
+            deductTokens={deductTokens}
           />
         ) : null;
       case View.VIDEO_CALL:
@@ -334,7 +353,19 @@ const App: React.FC = () => {
           <LiveStreamView 
             host={streamHost}
             participants={participants}
-            onEnd={() => setView(View.EXPLORE)} 
+            broadcastMedia={
+              streamHost.id === state.currentUser.id
+                ? (state.liveHostBroadcastMedia ?? { micOn: true, camOn: true })
+                : { micOn: true, camOn: true }
+            }
+            onEnd={() =>
+              setState((prev) => ({
+                ...prev,
+                currentView: View.EXPLORE,
+                liveStreamParticipants: undefined,
+                selectedLiveHost: undefined,
+              }))
+            }
             deductTokens={deductTokens}
             onViewProfile={(user) => openUserDetail(user)}
             onSwitchMain={(user) => {
@@ -357,12 +388,23 @@ const App: React.FC = () => {
             isHost 
             host={hostUser} 
             participants={participants}
-            onEnd={() => setState(prev => ({ ...prev, currentView: View.EXPLORE, liveStreamParticipants: undefined }))} 
+            broadcastMedia={state.liveHostBroadcastMedia ?? { micOn: true, camOn: true }}
+            onBroadcastMediaChange={(next) =>
+              setState((prev) => ({ ...prev, liveHostBroadcastMedia: next }))
+            }
+            onEnd={() =>
+              setState((prev) => ({
+                ...prev,
+                currentView: View.EXPLORE,
+                liveStreamParticipants: undefined,
+                liveHostBroadcastMedia: undefined,
+              }))
+            }
             deductTokens={deductTokens} 
             onReceiveGift={addEarnings}
             onAddGuest={(user) => {
               const current = state.liveStreamParticipants || [hostUser];
-              if (current.length < 5 && !current.find(p => p.id === user.id)) {
+              if (current.length < 4 && !current.find(p => p.id === user.id)) {
                 setState(prev => ({
                   ...prev,
                   liveStreamParticipants: [...(prev.liveStreamParticipants || [hostUser]), user]
@@ -376,6 +418,15 @@ const App: React.FC = () => {
                 const reordered = [current[idx], ...current.filter((_, i) => i !== idx)];
                 setState(prev => ({ ...prev, liveStreamParticipants: reordered }));
               }
+            }}
+            onRemoveGuest={(user) => {
+              if (user.id === hostUser.id) return;
+              setState((prev) => {
+                const current = prev.liveStreamParticipants || [hostUser];
+                const next = current.filter((p) => p.id !== user.id);
+                if (next.length === 0) return { ...prev, liveStreamParticipants: [hostUser] };
+                return { ...prev, liveStreamParticipants: next };
+              });
             }}
           />
         );
@@ -405,6 +456,22 @@ const App: React.FC = () => {
             onGoToTokenShop={() => setView(View.TOKEN_SHOP)}
             isFollowing={state.followingIds.includes(state.selectedUserForDetail.id)}
             onFollowToggle={() => toggleFollow(state.selectedUserForDetail!.id)}
+            onReport={() => {
+              window.alert("Thanks — we'll review your report.");
+            }}
+            onBlock={() => {
+              setState((prev) => {
+                const id = prev.selectedUserForDetail?.id;
+                if (!id) return prev;
+                return {
+                  ...prev,
+                  matches: prev.matches.filter((m) => m.id !== id),
+                  followingIds: prev.followingIds.filter((x) => x !== id),
+                  currentView: prev.profileReturnView ?? View.EXPLORE,
+                  selectedUserForDetail: undefined,
+                };
+              });
+            }}
           />
         ) : null;
       case View.CASH_OUT:
@@ -427,7 +494,7 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-white text-zinc-900 max-w-md mx-auto relative border-x border-zinc-200 shadow-2xl overflow-hidden">
       <main
-        className={`flex-1 ${isLiveView ? 'relative min-h-[100dvh] h-[100dvh] overflow-hidden' : 'overflow-y-auto pb-28'}`}
+        className={`flex-1 min-h-0 ${fullBleedMain ? 'relative flex flex-col min-h-[100dvh] h-[100dvh] overflow-hidden' : 'overflow-y-auto pb-28'}`}
         onScroll={handleMainScroll}
       >
         {renderView()}
@@ -438,7 +505,7 @@ const App: React.FC = () => {
         setView={setView}
         tokenCount={state.tokens}
         liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled}
-        hidden={isScrolling || isLiveView}
+        hidden={isScrolling || isLiveView || isChatRoom || isVideoCall}
       />
     </div>
   );

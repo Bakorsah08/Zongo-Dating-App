@@ -93,7 +93,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, setView, liveStreamingEnab
               type="button"
               onClick={() => setView(View.HOST_LIVE)}
               className="relative -top-7 flex h-[3.75rem] w-[3.75rem] shrink-0 items-center justify-center rounded-full bg-pink-500 text-white shadow-[0_4px_20px_rgba(236,72,153,0.45)] ring-[5px] ring-white transition-transform active:scale-95"
-              aria-label="Go Live"
+              aria-label="Start live stream"
             >
               <WebcamIcon className="h-7 w-7" />
             </button>

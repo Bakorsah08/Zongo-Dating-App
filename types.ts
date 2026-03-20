@@ -54,6 +54,8 @@ export interface Message {
   text?: string;
   imageUrl?: string;
   videoUrl?: string;
+  /** Voice note (e.g. blob: URL from MediaRecorder). */
+  audioUrl?: string;
   timestamp: number;
 }
 
@@ -82,7 +84,9 @@ export interface AppState {
   selectedLiveHost?: User;
   selectedUserForDetail?: User;
   profileReturnView?: View; // Where to go when backing from user profile
-  liveStreamParticipants?: User[]; // Host + up to 4 guests for multi-person live
+  liveStreamParticipants?: User[]; // Host + up to 3 guests for multi-person live
+  /** Host mic/camera — synced so viewers see the same overlays when watching your id */
+  liveHostBroadcastMedia?: { micOn: boolean; camOn: boolean };
 }
 
 export interface TokenPackage {
@@ -103,6 +107,8 @@ export interface MonetizationSettings {
   starterTokens: number;
   liveStreamEntryTokens: number;
   videoCallTokens: number;
+  /** Tokens charged each billing tick (~10s) during an active call, after the upfront connection cost. */
+  videoCallPerIntervalTokens: number;
   superLikeTokens: number;
   liveStreamingEnabled: boolean;
   giftingEnabled: boolean;

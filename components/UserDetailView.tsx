@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
+import BackButton from './BackButton';
 
 interface UserDetailViewProps {
   user: User;
@@ -11,11 +12,25 @@ interface UserDetailViewProps {
   onGoToTokenShop?: () => void;
   isFollowing?: boolean;
   onFollowToggle?: () => void;
+  onReport?: (user: User) => void;
+  onBlock?: (user: User) => void;
 }
 
-const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, onLive, deductTokens, onGoToTokenShop, isFollowing = false, onFollowToggle }) => {
+const UserDetailView: React.FC<UserDetailViewProps> = ({
+  user,
+  onBack,
+  onChat,
+  onLive,
+  deductTokens,
+  onGoToTokenShop,
+  isFollowing = false,
+  onFollowToggle,
+  onReport,
+  onBlock,
+}) => {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [superLiked, setSuperLiked] = useState(false);
+  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const { superLikeTokens } = getMonetizationSettings();
 
   const handleSuperLike = () => {
@@ -51,12 +66,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
       <div className="relative h-[450px] w-full">
         <img src={user.avatar} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
-        <button 
-          onClick={onBack}
-          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white text-xl border border-white/10"
-        >
-          ←
-        </button>
+        <BackButton onClick={onBack} className="absolute top-6 left-6 z-10" />
         <div className="absolute top-6 right-6 flex items-center gap-2">
           {onFollowToggle && (
             <button
@@ -81,6 +91,23 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
               LIVE
             </div>
           )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOverflowMenuOpen(true);
+            }}
+            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 text-white hover:bg-black/60 transition-colors"
+            aria-label="More options"
+            aria-expanded={overflowMenuOpen}
+            aria-haspopup="dialog"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden className="text-white">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -190,6 +217,65 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ user, onBack, onChat, o
           </section>
         )}
       </div>
+
+      {/* Profile overflow: Report / Block / Cancel */}
+      {overflowMenuOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex flex-col justify-end bg-black/50 backdrop-blur-[2px] animate-in fade-in duration-200"
+          role="presentation"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Close menu"
+            onClick={() => setOverflowMenuOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-overflow-title"
+            className="relative mx-auto w-full max-w-md rounded-t-[28px] bg-white px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(0,0,0,0.12)] animate-in slide-in-from-bottom duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-zinc-300" aria-hidden />
+            <p id="profile-overflow-title" className="sr-only">
+              Profile actions for {user.name}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="w-full rounded-full border-0 bg-yellow-400 py-3.5 text-center text-sm font-bold text-zinc-900 transition-colors hover:bg-yellow-300 active:scale-[0.99]"
+                onClick={() => {
+                  setOverflowMenuOpen(false);
+                  if (onReport) onReport(user);
+                  else window.alert("Thanks — we'll review your report.");
+                }}
+              >
+                Report
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-full border-0 bg-yellow-400 py-3.5 text-center text-sm font-bold text-red-600 transition-colors hover:bg-yellow-300 active:scale-[0.99]"
+                onClick={() => {
+                  if (!window.confirm(`Block ${user.name}? You won't see them in matches or chats.`)) return;
+                  setOverflowMenuOpen(false);
+                  if (onBlock) onBlock(user);
+                  else window.alert(`${user.name} has been blocked.`);
+                }}
+              >
+                Block
+              </button>
+              <button
+                type="button"
+                className="mt-1 w-full rounded-full border border-black/60 bg-white py-3.5 text-center text-sm font-bold text-zinc-700 transition-colors hover:bg-zinc-50 active:scale-[0.99]"
+                onClick={() => setOverflowMenuOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full Screen Image Viewer */}
       {viewingIndex !== null && (

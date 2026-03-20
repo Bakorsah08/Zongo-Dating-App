@@ -1,7 +1,8 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import type { Permission } from './types';
 import { useAuth } from './useAuth';
+import { backButtonClassName, BackChevron } from '../components/BackButton';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -28,9 +29,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         <div className="text-center">
           <h2 className="text-xl font-bold text-white mb-2">Access Denied</h2>
           <p className="text-zinc-500">You don&apos;t have permission to view this page.</p>
-          <a href="/admin" className="inline-block mt-4 text-rose-500 hover:underline">
-            ← Back to Dashboard
-          </a>
+          <div className="flex justify-center mt-6">
+            <Link to="/admin" aria-label="Back to Dashboard" className={backButtonClassName}>
+              <BackChevron />
+            </Link>
+          </div>
         </div>
       </div>
     );

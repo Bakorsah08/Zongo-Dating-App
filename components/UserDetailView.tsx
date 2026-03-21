@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { User } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
 import BackButton from './BackButton';
@@ -12,6 +12,8 @@ interface UserDetailViewProps {
   onGoToTokenShop?: () => void;
   isFollowing?: boolean;
   onFollowToggle?: () => void;
+  /** Called when a Super Like succeeds so the profile is added to following. */
+  onFollowUser?: (userId: string) => void;
   onReport?: (user: User) => void;
   onBlock?: (user: User) => void;
 }
@@ -25,67 +27,79 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
   onGoToTokenShop,
   isFollowing = false,
   onFollowToggle,
+  onFollowUser,
   onReport,
   onBlock,
 }) => {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [superLiked, setSuperLiked] = useState(false);
   const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
+  const albumScrollRef = useRef<HTMLDivElement>(null);
   const { superLikeTokens } = getMonetizationSettings();
+
+  /** Main profile photo first, then album URLs (no duplicates). */
+  const galleryImages = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    if (user.avatar) {
+      list.push(user.avatar);
+      seen.add(user.avatar);
+    }
+    for (const url of user.album) {
+      if (!seen.has(url)) {
+        list.push(url);
+        seen.add(url);
+      }
+    }
+    return list;
+  }, [user.avatar, user.album]);
+
+  const scrollAlbumThumbs = (direction: -1 | 1) => {
+    const el = albumScrollRef.current;
+    if (!el) return;
+    const step = Math.max(120, Math.floor(el.clientWidth * 0.35));
+    el.scrollBy({ left: direction * step, behavior: 'smooth' });
+  };
 
   const handleSuperLike = () => {
     if (superLiked) return;
+    const markSuperLikedAndFollow = () => {
+      setSuperLiked(true);
+      onFollowUser?.(user.id);
+    };
     if (deductTokens && superLikeTokens > 0) {
       if (deductTokens(superLikeTokens)) {
-        setSuperLiked(true);
+        markSuperLikedAndFollow();
       } else {
         onGoToTokenShop?.();
       }
     } else {
-      setSuperLiked(true);
+      markSuperLikedAndFollow();
     }
   };
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (viewingIndex !== null) {
-      setViewingIndex((viewingIndex + 1) % user.album.length);
+    if (viewingIndex !== null && galleryImages.length > 0) {
+      setViewingIndex((viewingIndex + 1) % galleryImages.length);
     }
   };
 
   const prevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (viewingIndex !== null) {
-      setViewingIndex((viewingIndex - 1 + user.album.length) % user.album.length);
+    if (viewingIndex !== null && galleryImages.length > 0) {
+      setViewingIndex((viewingIndex - 1 + galleryImages.length) % galleryImages.length);
     }
   };
 
   return (
-    <div className="relative min-h-screen bg-black flex flex-col">
+    <div className="relative min-h-screen bg-white flex flex-col">
       {/* Header Image */}
       <div className="relative h-[450px] w-full">
         <img src={user.avatar} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
         <BackButton onClick={onBack} className="absolute top-6 left-6 z-10" />
         <div className="absolute top-6 right-6 flex items-center gap-2">
-          {onFollowToggle && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onFollowToggle(); }}
-              className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 text-white hover:bg-black/60 transition-colors"
-              aria-label={isFollowing ? 'Unfollow' : 'Follow'}
-            >
-              {isFollowing ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-pink-400">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-              )}
-            </button>
-          )}
           {user.isLive && (
             <div className="bg-red-600 px-3 py-1 rounded-full text-xs font-black animate-pulse shadow-lg">
               LIVE
@@ -109,42 +123,127 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
             </svg>
           </button>
         </div>
+
+        {galleryImages.length > 1 && (
+          <div className="absolute bottom-14 left-0 right-0 z-10 flex items-center gap-2 px-3 sm:px-4">
+            <button
+              type="button"
+              onClick={() => scrollAlbumThumbs(-1)}
+              className="shrink-0 flex h-10 w-10 items-center justify-center text-white transition-opacity hover:opacity-90 active:scale-95"
+              aria-label="Scroll photos left"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <div
+              ref={albumScrollRef}
+              className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              <div className="flex gap-2 py-0.5">
+                {galleryImages.map((img, idx) => (
+                  <button
+                    key={`${img}-${idx}`}
+                    type="button"
+                    onClick={() => setViewingIndex(idx)}
+                    className="relative h-[54px] w-[54px] shrink-0 overflow-hidden rounded-lg bg-black/20 transition-transform active:scale-95"
+                  >
+                    <img
+                      src={img}
+                      alt={idx === 0 ? `${user.name} profile photo` : `${user.name} photo ${idx + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollAlbumThumbs(1)}
+              className="shrink-0 flex h-10 w-10 items-center justify-center text-white transition-opacity hover:opacity-90 active:scale-95"
+              aria-label="Scroll photos right"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Profile Content */}
-      <div className="flex-1 -mt-10 relative z-10 bg-black rounded-t-[40px] px-6 pt-8 pb-32">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-black text-white">{user.name}, {user.age}</h1>
-              {user.isAI && <span className="text-xs font-bold bg-pink-600/80 text-white px-2 py-1 rounded-full border border-white/20">🤖 AI</span>}
+      <div className="flex-1 -mt-10 relative z-10 bg-white rounded-t-[32px] px-6 pt-8 pb-32">
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <h1 className="text-3xl font-black text-zinc-900">{user.name}, {user.age}</h1>
+              {user.isAI && <span className="text-xs font-bold bg-pink-600 text-white px-2 py-1 rounded-full">🤖 AI</span>}
               {user.badgeTier && user.badgeTier !== 'none' && (
-                <span className="text-2xl" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
+                <span className="shrink-0 text-2xl" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
                   {getBadges().find(b => b.id === user.badgeTier)?.icon}
                 </span>
               )}
             </div>
-            <p className="text-zinc-400 text-sm mt-1">📍 {user.location}</p>
+            {!user.isLive && !user.isAI && (
+              <button
+                type="button"
+                onClick={handleSuperLike}
+                className={`shrink-0 rounded-2xl px-3 py-2.5 text-center text-xs font-black shadow-md transition-all active:scale-95 sm:px-4 sm:text-sm ${
+                  superLiked
+                    ? 'bg-pink-100 text-pink-800'
+                    : 'bg-zinc-100 text-zinc-800 hover:bg-zinc-200'
+                }`}
+              >
+                ⭐ {superLiked ? 'Super Liked!' : `Super Like${superLikeTokens > 0 ? ` (💎 ${superLikeTokens})` : ''}`}
+              </button>
+            )}
           </div>
-          <div className="flex gap-2"></div>
+          <p className="text-zinc-600 mt-1 text-sm">📍 {user.location}</p>
         </div>
 
+        {/* Bio */}
+        <section className="mb-8">
+          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">About</h4>
+          <p className="text-zinc-700 leading-relaxed italic">
+            "{user.bio}"
+          </p>
+        </section>
+
+        {/* Interests */}
+        <section className="mb-10">
+          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">{user.isAI ? 'Personality' : 'Interests'}</h4>
+          <div className="flex flex-wrap gap-2">
+            {(user.isAI ? user.personality : user.interests)?.map(i => (
+              <span key={i} className="px-4 py-2 bg-zinc-100 rounded-full text-xs font-medium text-zinc-800">
+                {i}
+              </span>
+            ))}
+            {user.isAI && user.style && (
+              <span className="px-4 py-2 bg-zinc-100 rounded-full text-xs font-medium text-zinc-800">
+                {user.style} Style
+              </span>
+            )}
+          </div>
+        </section>
+
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-4 mb-10">
+        <div className="flex gap-3 sm:gap-4 mb-10 items-stretch">
           <button 
+            type="button"
             onClick={() => onChat(user)}
-            className="gradient-pink py-4 rounded-2xl font-black text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="flex-1 min-w-0 rounded-full bg-black py-4 font-black text-white shadow-lg transition-colors hover:bg-zinc-900 active:scale-95 flex items-center justify-center gap-2"
           >
-            {user.isAI ? "💬 AI Chat" : "💬 Chat Now"}
+            {user.isAI ? "💬 AI Chat" : "💬 Send Message"}
           </button>
           {user.isLive ? (
             <button 
+              type="button"
               onClick={() => onLive(user)}
-              className="bg-white text-black py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="flex-1 min-w-0 bg-zinc-900 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <span>📺 Watch Live</span>
               {user.viewerCount && (
-                <span className="flex items-center gap-1 text-xs bg-black/10 px-2 py-1 rounded-full">
+                <span className="flex items-center gap-1 text-xs bg-white/15 px-2 py-1 rounded-full">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                   {user.viewerCount.toLocaleString()}
                 </span>
@@ -152,70 +251,41 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
             </button>
           ) : user.isAI ? (
             <button 
+              type="button"
               onClick={() => onChat(user)} // Should probably lead to video call initiation
-              className="bg-white text-black py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="flex-1 min-w-0 bg-zinc-900 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               📹 AI Video Call
             </button>
-          ) : (
-            <button 
-              onClick={handleSuperLike}
-              className={`py-4 rounded-2xl font-black active:scale-95 transition-all flex items-center justify-center gap-2 ${
-                superLiked 
-                  ? 'bg-pink-600/30 border border-pink-500/50 text-pink-300' 
-                  : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-pink-500/50'
-              }`}
+          ) : null}
+          {onFollowToggle && (
+            <button
+              type="button"
+              onClick={() => onFollowToggle()}
+              className="flex h-14 w-14 shrink-0 items-center justify-center self-center rounded-full border-0 bg-white shadow-[0_4px_14px_rgba(0,0,0,0.12),0_2px_4px_rgba(0,0,0,0.06)] ring-0 outline-none transition-colors hover:bg-zinc-50 active:scale-95 focus-visible:ring-2 focus-visible:ring-pink-400 focus-visible:ring-offset-2"
+              aria-label={isFollowing ? 'Unfollow' : 'Follow'}
             >
-              ⭐ {superLiked ? 'Super Liked!' : `Super Like${superLikeTokens > 0 ? ` (💎 ${superLikeTokens})` : ''}`}
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden>
+                {isFollowing ? (
+                  <path
+                    fill="#ec4899"
+                    stroke="none"
+                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                  />
+                ) : (
+                  <path
+                    fill="#ffffff"
+                    stroke="#000000"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                  />
+                )}
+              </svg>
             </button>
           )}
         </div>
-
-        {/* Bio */}
-        <section className="mb-8">
-          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">About</h4>
-          <p className="text-zinc-300 leading-relaxed italic">
-            "{user.bio}"
-          </p>
-        </section>
-
-        {/* Interests */}
-        <section className="mb-8">
-          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">{user.isAI ? 'Personality' : 'Interests'}</h4>
-          <div className="flex flex-wrap gap-2">
-            {(user.isAI ? user.personality : user.interests)?.map(i => (
-              <span key={i} className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-medium text-zinc-300">
-                {i}
-              </span>
-            ))}
-            {user.isAI && user.style && (
-              <span className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-medium text-zinc-300">
-                {user.style} Style
-              </span>
-            )}
-          </div>
-        </section>
-
-        {/* Album */}
-        {user.album.length > 0 && (
-          <section>
-            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Photo Album</h4>
-            <div className="grid grid-cols-2 gap-3">
-              {user.album.map((img, idx) => (
-                <div 
-                  key={idx} 
-                  onClick={() => setViewingIndex(idx)}
-                  className="aspect-square rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 group cursor-pointer active:scale-95 transition-transform"
-                >
-                  <img 
-                    src={img} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
 
       {/* Profile overflow: Report / Block / Cancel */}
@@ -278,7 +348,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
       )}
 
       {/* Full Screen Image Viewer */}
-      {viewingIndex !== null && (
+      {viewingIndex !== null && galleryImages[viewingIndex] && (
         <div 
           className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in duration-200"
           onClick={() => setViewingIndex(null)}
@@ -299,7 +369,8 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
             </button>
             
             <img 
-              src={user.album[viewingIndex]} 
+              src={galleryImages[viewingIndex]} 
+              alt=""
               className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
@@ -313,7 +384,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
           </div>
           
           <div className="absolute bottom-8 text-white/50 text-xs font-bold tracking-widest">
-            {viewingIndex + 1} / {user.album.length}
+            {viewingIndex + 1} / {galleryImages.length}
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { getUsers, getBadges, getMonetizationSettings } from '../data';
-import { User, UserGender } from '../types';
+import { getUsers, getBadges, getMonetizationSettings, getExploreSpotlight } from '../data';
+import type { ExploreSpotlight, User, UserGender } from '../types';
 
 interface DiscoverViewProps {
   userGender?: UserGender;
@@ -17,10 +17,74 @@ const getBadgeRank = (user: User): number => {
   return getBadges().find(b => b.id === tier)?.rank ?? 0;
 };
 
+/** Reserved first Explore grid cell — super-admin ads & announcements. */
+const ExploreSpotlightCard: React.FC<{ spotlight: ExploreSpotlight }> = ({ spotlight }) => {
+  const active = spotlight.enabled;
+  const badge = active ? (spotlight.badgeLabel.trim() || 'Promo') : 'Featured';
+  const title = active ? (spotlight.title.trim() || 'Zongo') : 'Zongo';
+  const subtitle = active ? (spotlight.subtitle.trim() || 'Promos & news') : 'Ads & announcements';
+  const imgSrc =
+    active && spotlight.imageDataUrl?.trim()
+      ? spotlight.imageDataUrl.trim()
+      : active && spotlight.imageUrl.trim()
+        ? spotlight.imageUrl.trim()
+        : '';
+  const bgColor =
+    active && spotlight.backgroundColor?.trim() ? spotlight.backgroundColor.trim() : '';
+  const link = spotlight.linkUrl.trim();
+
+  const handleActivate = () => {
+    if (!active || !link) return;
+    const url =
+      link.startsWith('http://') || link.startsWith('https://') ? link : `https://${link}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={active && link ? 0 : undefined}
+      onClick={handleActivate}
+      onKeyDown={(e) => {
+        if (!active || !link) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleActivate();
+        }
+      }}
+      className={`group relative aspect-[3/4] overflow-hidden rounded-[0.65rem] border border-white transition-transform active:scale-[0.99] ${
+        active && link ? 'cursor-pointer' : 'cursor-default'
+      }`}
+    >
+      {imgSrc ? (
+        <img
+          src={imgSrc}
+          alt=""
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : bgColor ? (
+        <div className="absolute inset-0" style={{ backgroundColor: bgColor }} />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-violet-600 to-blue-600" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+      <div className="absolute left-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter text-zinc-900 shadow-sm">
+        {badge}
+      </div>
+      <div className="absolute bottom-3 left-3 right-3">
+        <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">{title}</h3>
+        <p className="text-[10px] text-zinc-200 drop-shadow-md line-clamp-2">{subtitle}</p>
+      </div>
+    </div>
+  );
+};
+
 const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, onSelectLive, onGoLive }) => {
   const liveStreamingEnabled = getMonetizationSettings().liveStreamingEnabled;
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTextFilter, setActiveTextFilter] = useState<'recommend' | 'newcomer' | 'nearby' | 'live'>('recommend');
+  const [activeTextFilter, setActiveTextFilter] = useState<
+    'all' | 'recommend' | 'newcomer' | 'nearby' | 'live'
+  >('all');
   
   // Filter states
   const [profileType, setProfileType] = useState<'human' | 'ai'>('human');
@@ -64,6 +128,10 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
       }
     }
 
+    if (activeTextFilter === 'all') {
+      return [...filtered];
+    }
+
     if (activeTextFilter === 'live') {
       return filtered
         .filter(u => u.isLive)
@@ -92,6 +160,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
   const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
   const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
   const areAnyFiltersActive = (profileType === 'human' && areHumanFiltersActive) || (profileType === 'ai' && areAIFiltersActive);
+  const exploreSpotlight = getExploreSpotlight();
 
   return (
     <div className="flex flex-col min-h-full bg-white">
@@ -109,25 +178,36 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
         </button>
       </div>
 
-      <div className="px-4 pb-2 flex items-center gap-5 overflow-x-auto">
+      <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTextFilter('all')}
+          className={`whitespace-nowrap rounded-full px-4 py-2 text-xs transition-all ${
+            activeTextFilter === 'all'
+              ? 'bg-gradient-to-r from-pink-200 to-blue-200 font-extrabold text-zinc-900'
+              : 'bg-zinc-100 font-medium text-zinc-500'
+          }`}
+        >
+          All
+        </button>
         <button
           type="button"
           onClick={() => setActiveTextFilter('recommend')}
-          className={`whitespace-nowrap transition-all ${
+          className={`whitespace-nowrap rounded-full px-4 py-2 text-xs transition-all ${
             activeTextFilter === 'recommend'
-              ? 'font-extrabold text-xs text-zinc-900'
-              : 'font-medium text-[10.5px] text-zinc-500'
+              ? 'bg-gradient-to-r from-pink-200 to-blue-200 font-extrabold text-zinc-900'
+              : 'bg-zinc-100 font-medium text-zinc-500'
           }`}
         >
-          Recommend
+          Recommended
         </button>
         <button
           type="button"
           onClick={() => setActiveTextFilter('newcomer')}
-          className={`whitespace-nowrap transition-all ${
+          className={`whitespace-nowrap rounded-full px-4 py-2 text-xs transition-all ${
             activeTextFilter === 'newcomer'
-              ? 'font-extrabold text-xs text-zinc-900'
-              : 'font-medium text-[10.5px] text-zinc-500'
+              ? 'bg-gradient-to-r from-pink-200 to-blue-200 font-extrabold text-zinc-900'
+              : 'bg-zinc-100 font-medium text-zinc-500'
           }`}
         >
           Newcomer
@@ -135,10 +215,10 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
         <button
           type="button"
           onClick={() => setActiveTextFilter('nearby')}
-          className={`whitespace-nowrap transition-all ${
+          className={`whitespace-nowrap rounded-full px-4 py-2 text-xs transition-all ${
             activeTextFilter === 'nearby'
-              ? 'font-extrabold text-xs text-zinc-900'
-              : 'font-medium text-[10.5px] text-zinc-500'
+              ? 'bg-gradient-to-r from-pink-200 to-blue-200 font-extrabold text-zinc-900'
+              : 'bg-zinc-100 font-medium text-zinc-500'
           }`}
         >
           Nearby
@@ -146,10 +226,10 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
         <button
           type="button"
           onClick={() => setActiveTextFilter('live')}
-          className={`whitespace-nowrap transition-all ${
+          className={`whitespace-nowrap rounded-full px-4 py-2 text-xs transition-all ${
             activeTextFilter === 'live'
-              ? 'font-extrabold text-xs text-zinc-900'
-              : 'font-medium text-[10.5px] text-zinc-500'
+              ? 'bg-gradient-to-r from-pink-200 to-blue-200 font-extrabold text-zinc-900'
+              : 'bg-zinc-100 font-medium text-zinc-500'
           }`}
         >
           Live
@@ -235,13 +315,14 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-0 pb-24 w-full">
+      <div className="grid w-full grid-cols-2 gap-[0.225rem] px-[0.15rem] pb-24 sm:gap-[0.3rem] sm:px-[0.3rem]">
+        <ExploreSpotlightCard spotlight={exploreSpotlight} />
         {filteredUsers.length > 0 ? (
           filteredUsers.map((user) => (
             <div 
               key={user.id}
               onClick={() => (user.isLive && liveStreamingEnabled) ? onSelectLive(user) : onSelectUser(user)}
-              className="relative aspect-[3/4] overflow-hidden group cursor-pointer active:scale-[0.99] transition-transform"
+              className="relative aspect-[3/4] cursor-pointer overflow-hidden rounded-[0.65rem] border border-white transition-transform group active:scale-[0.99]"
             >
               <img 
                 src={user.avatar} 
@@ -288,12 +369,10 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
             </div>
           ))
         ) : (
-          <div className="col-span-2 py-20 px-4 text-center flex flex-col items-center gap-4">
-            <span className="text-4xl grayscale opacity-50">🔍</span>
-            <div className="space-y-1">
-              <h3 className="font-bold text-zinc-600">No results found</h3>
-              <p className="text-xs text-zinc-500">Try broadening your search filters</p>
-            </div>
+          <div className="flex aspect-[3/4] flex-col items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 px-3 text-center">
+            <span className="text-3xl grayscale opacity-50">🔍</span>
+            <h3 className="mt-2 text-sm font-bold text-zinc-600">No results</h3>
+            <p className="mt-1 text-[10px] text-zinc-500">Try adjusting filters</p>
           </div>
         )}
       </div>

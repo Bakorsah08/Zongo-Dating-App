@@ -10,3 +10,4 @@ export const getBadges = () => adminStore.getBadges();
 export const getTokenPackages = () => adminStore.getTokenPackages();
 export const getGifts = () => adminStore.getGifts();
 export const getMonetizationSettings = () => adminStore.getMonetizationSettings();
+export const getExploreSpotlight = () => adminStore.getExploreSpotlight();

@@ -306,12 +306,23 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
           </video>
         ) : (
           <>
-            <img src={partner.avatar} className="w-full h-full object-cover blur-sm opacity-50" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <img src={partner.avatar} className="w-40 h-40 rounded-full object-cover border-4 border-pink-500 shadow-2xl animate-pulse" />
-              <h2 className="text-2xl font-bold mt-6">{partner.name}</h2>
-              <p className="text-pink-400 font-medium">In AI Video Call...</p>
-            </div>
+            <img
+              src={partner.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+            {!isCalling && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-32 flex flex-col items-center gap-1 px-4 text-center">
+                <h2 className="text-xl font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
+                  {partner.name}
+                </h2>
+                {partner.isAI && (
+                  <p className="text-sm font-medium text-pink-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+                    In AI Video Call…
+                  </p>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

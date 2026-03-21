@@ -48,6 +48,23 @@ export interface User {
   gender?: UserGender; // For explore filtering (male sees females, female sees males)
 }
 
+/** First Explore grid slot — ads & announcements (managed in admin Ad centre). */
+export interface ExploreSpotlight {
+  enabled: boolean;
+  /** Small label on the card (e.g. Promo, Announcement). */
+  badgeLabel: string;
+  title: string;
+  subtitle: string;
+  /** Remote background image URL (https). */
+  imageUrl: string;
+  /** Uploaded image as a data URL; takes priority over imageUrl when set. */
+  imageDataUrl: string;
+  /** Solid background (hex or CSS color) when no image is set. */
+  backgroundColor: string;
+  /** Optional destination when the card is tapped (https recommended). */
+  linkUrl: string;
+}
+
 export interface Message {
   id: string;
   senderId: string;

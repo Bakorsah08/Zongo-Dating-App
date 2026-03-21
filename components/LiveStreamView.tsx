@@ -701,9 +701,7 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({
               type="button"
               data-guest-rail-handle
               onClick={onGuestHandleClick}
-              className={`flex h-[4.5rem] w-[1.4rem] shrink-0 flex-col items-center justify-center self-center border border-white/20 bg-zinc-600/50 text-base font-bold leading-none text-white shadow-lg backdrop-blur-[2px] transition-colors hover:bg-zinc-500/50 active:scale-95 ${
-                viewerGuestsHidden ? 'rounded-r-lg rounded-l-none' : 'rounded-l-lg'
-              }`}
+              className="flex h-[4.5rem] w-[1.4rem] shrink-0 flex-col items-center justify-center self-center rounded-l-lg rounded-r-none border-0 bg-zinc-600/50 text-base font-bold leading-none text-white shadow-lg backdrop-blur-[2px] transition-colors hover:bg-zinc-500/50 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               aria-label={viewerGuestsHidden ? 'Show guest cameras' : 'Hide guest cameras'}
               aria-expanded={!viewerGuestsHidden}
             >
@@ -798,7 +796,7 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({
         {showViewerGiftStrip && (
           <div className="shrink-0 bg-transparent px-0 pt-2">
             <div
-              className="flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              className="flex gap-1 overflow-x-auto px-2 pb-2 scrollbar-hide [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
               role="list"
               aria-label="Gifts — scroll sideways to send"
             >
@@ -808,17 +806,17 @@ const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                   type="button"
                   role="listitem"
                   onClick={() => handleSendGift(gift)}
-                  className="flex min-w-[4.5rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border-0 bg-transparent py-2 px-2 transition-transform active:scale-95"
+                  className="flex w-[2.65rem] min-w-[2.65rem] shrink-0 flex-col items-center gap-0 rounded-lg border-0 bg-transparent px-0 py-1.5 transition-transform active:scale-95"
                   aria-label={`Send ${gift.name}, ${gift.value} tokens`}
                 >
-                  <span className="text-2xl leading-none" aria-hidden>
+                  <span className="text-xl leading-none" aria-hidden>
                     {gift.icon}
                   </span>
-                  <span className="max-w-[4.25rem] truncate text-center text-[9px] font-bold leading-tight text-zinc-200">
+                  <span className="w-full truncate text-center text-[7px] font-bold leading-tight text-zinc-200">
                     {gift.name}
                   </span>
-                  <span className="flex items-center gap-0.5 text-[10px] font-black text-pink-400">
-                    <span className="text-[8px]">💎</span>
+                  <span className="flex items-center gap-0 text-[8px] font-black leading-none text-pink-400">
+                    <span className="text-[7px]">💎</span>
                     {gift.value}
                   </span>
                 </button>

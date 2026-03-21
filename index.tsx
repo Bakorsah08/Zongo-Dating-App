@@ -14,6 +14,7 @@ import BadgesPage from './admin/BadgesPage';
 import TokensPage from './admin/TokensPage';
 import GiftsPage from './admin/GiftsPage';
 import AdminsPage from './admin/AdminsPage';
+import AdsCentrePage from './admin/AdsCentrePage';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -37,6 +38,14 @@ root.render(
             }
           >
             <Route index element={<AdminDashboard />} />
+            <Route
+              path="ads"
+              element={
+                <ProtectedRoute requiredPermission="manage_explore_ads">
+                  <AdsCentrePage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="monetization"
               element={

@@ -7,6 +7,7 @@ import { backButtonClassName, BackChevron } from '../components/BackButton';
 
 const navItems: { path: string; label: string; icon: string; permission: Permission }[] = [
   { path: '/admin', label: 'Dashboard', icon: '📊', permission: 'view_dashboard' },
+  { path: '/admin/ads', label: 'Ad centre', icon: '📣', permission: 'manage_explore_ads' },
   { path: '/admin/monetization', label: 'Monetization', icon: '💰', permission: 'manage_monetization' },
   { path: '/admin/payout', label: 'Payout', icon: '🏦', permission: 'manage_monetization' },
   { path: '/admin/users', label: 'Users', icon: '👥', permission: 'manage_users' },

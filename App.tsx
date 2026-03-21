@@ -121,6 +121,13 @@ const App: React.FC = () => {
     }));
   };
 
+  const ensureFollowing = (userId: string) => {
+    setState((prev) => {
+      if (prev.followingIds.includes(userId)) return prev;
+      return { ...prev, followingIds: [...prev.followingIds, userId] };
+    });
+  };
+
   const openChat = (user: User) => {
     const isAlreadyMatched = state.matches?.find(m => m.id === user.id);
     if (!isAlreadyMatched && !user.isAI) {
@@ -456,6 +463,7 @@ const App: React.FC = () => {
             onGoToTokenShop={() => setView(View.TOKEN_SHOP)}
             isFollowing={state.followingIds.includes(state.selectedUserForDetail.id)}
             onFollowToggle={() => toggleFollow(state.selectedUserForDetail!.id)}
+            onFollowUser={ensureFollowing}
             onReport={() => {
               window.alert("Thanks — we'll review your report.");
             }}

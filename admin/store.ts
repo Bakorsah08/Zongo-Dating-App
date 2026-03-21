@@ -1,7 +1,18 @@
-import type { User, BadgeInfo, TokenPackage, Gift, MonetizationSettings, PayoutDetails } from '../types';
+import type { User, BadgeInfo, TokenPackage, Gift, MonetizationSettings, PayoutDetails, ExploreSpotlight } from '../types';
 import { MOCK_USERS, BADGE_TIERS, TOKEN_PACKAGES, GIFTS, DEFAULT_MONETIZATION_SETTINGS } from '../constants';
 
 const STORAGE_KEY = 'zongo_admin_data';
+
+export const DEFAULT_EXPLORE_SPOTLIGHT: ExploreSpotlight = {
+  enabled: false,
+  badgeLabel: 'Promo',
+  title: 'Featured on Zongo',
+  subtitle: 'Tap to see this week’s highlight',
+  imageUrl: '',
+  imageDataUrl: '',
+  backgroundColor: '',
+  linkUrl: '',
+};
 
 export interface AdminData {
   users: User[];
@@ -15,6 +26,8 @@ export interface AdminData {
   platformTransferredOut: number;
   /** Platform owner's bank or mobile money details for withdrawals */
   platformPayoutDetails: PayoutDetails | null;
+  /** Explore first-card spotlight (ads / announcements). */
+  exploreSpotlight: ExploreSpotlight;
 }
 
 function loadFromStorage(): AdminData | null {
@@ -35,6 +48,11 @@ function loadFromStorage(): AdminData | null {
     }
     if (!data.platformPayoutDetails) {
       data.platformPayoutDetails = null;
+    }
+    if (!data.exploreSpotlight || typeof data.exploreSpotlight !== 'object') {
+      data.exploreSpotlight = { ...DEFAULT_EXPLORE_SPOTLIGHT };
+    } else {
+      data.exploreSpotlight = { ...DEFAULT_EXPLORE_SPOTLIGHT, ...data.exploreSpotlight };
     }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -62,6 +80,7 @@ const defaultData: AdminData = {
   platformRevenueFromTokenSales: 0,
   platformTransferredOut: 0,
   platformPayoutDetails: null,
+  exploreSpotlight: { ...DEFAULT_EXPLORE_SPOTLIGHT },
 };
 
 let cached: AdminData = loadFromStorage() ?? { ...defaultData };
@@ -100,6 +119,21 @@ export const adminStore = {
 
   getMonetizationSettings(): MonetizationSettings {
     return clone(cached.monetizationSettings);
+  },
+
+  getExploreSpotlight(): ExploreSpotlight {
+    const s = cached.exploreSpotlight;
+    if (!s) return { ...DEFAULT_EXPLORE_SPOTLIGHT };
+    return { ...DEFAULT_EXPLORE_SPOTLIGHT, ...clone(s) };
+  },
+
+  setExploreSpotlight(updates: Partial<ExploreSpotlight>) {
+    cached.exploreSpotlight = {
+      ...DEFAULT_EXPLORE_SPOTLIGHT,
+      ...(cached.exploreSpotlight || {}),
+      ...updates,
+    };
+    saveToStorage(cached);
   },
 
   getPlatformRevenueFromTokenSales(): number {

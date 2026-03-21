@@ -8,6 +8,7 @@ export type Permission =
   | 'manage_monetization'
   | 'reset_data'
   | 'manage_admins'
+  | 'manage_explore_ads'
   | 'view_dashboard';
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -20,6 +21,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'manage_monetization',
     'reset_data',
     'manage_admins',
+    'manage_explore_ads',
   ],
   admin: [
     'view_dashboard',

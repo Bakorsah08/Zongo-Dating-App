@@ -14,6 +14,8 @@ interface UserDetailViewProps {
   onFollowToggle?: () => void;
   /** Called when a Super Like succeeds so the profile is added to following. */
   onFollowUser?: (userId: string) => void;
+  /** Recipient should be notified (e.g. in-app notification on their profile). */
+  onSuperLikeSuccess?: (recipient: User) => void;
   onReport?: (user: User) => void;
   onBlock?: (user: User) => void;
 }
@@ -28,6 +30,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
   isFollowing = false,
   onFollowToggle,
   onFollowUser,
+  onSuperLikeSuccess,
   onReport,
   onBlock,
 }) => {
@@ -66,6 +69,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
     const markSuperLikedAndFollow = () => {
       setSuperLiked(true);
       onFollowUser?.(user.id);
+      onSuperLikeSuccess?.(user);
     };
     if (deductTokens && superLikeTokens > 0) {
       if (deductTokens(superLikeTokens)) {

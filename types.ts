@@ -48,21 +48,38 @@ export interface User {
   gender?: UserGender; // For explore filtering (male sees females, female sees males)
 }
 
-/** First Explore grid slot — ads & announcements (managed in admin Ad centre). */
-export interface ExploreSpotlight {
+/** One slide in the Explore first-tile carousel (Ad centre). */
+export interface ExploreCarouselAd {
+  id: string;
+  /** When true, included in the live carousel on Explore. */
   enabled: boolean;
-  /** Small label on the card (e.g. Promo, Announcement). */
   badgeLabel: string;
   title: string;
   subtitle: string;
-  /** Remote background image URL (https). */
   imageUrl: string;
-  /** Uploaded image as a data URL; takes priority over imageUrl when set. */
   imageDataUrl: string;
-  /** Solid background (hex or CSS color) when no image is set. */
   backgroundColor: string;
-  /** Optional destination when the card is tapped (https recommended). */
   linkUrl: string;
+  /** Seconds to show this slide before advancing (carousel uses 3–120). */
+  displayDurationSec: number;
+}
+
+export interface ExploreCarouselConfig {
+  /** Order matches carousel sequence on Explore. */
+  ads: ExploreCarouselAd[];
+}
+
+/** In-app notification stored per recipient user id (e.g. Super Like). */
+export type AppNotificationType = 'super_like';
+
+export interface AppNotification {
+  id: string;
+  type: AppNotificationType;
+  fromUserId: string;
+  fromName: string;
+  fromAvatar: string;
+  createdAt: number;
+  read: boolean;
 }
 
 export interface Message {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, User, AppState } from './types';
 import { getUsers, getBadges, getMonetizationSettings } from './data';
 import { adminStore } from './admin/store';
@@ -16,6 +16,13 @@ import ProfileView from './components/ProfileView';
 import UserDetailView from './components/UserDetailView';
 import HomeMenuView from './components/HomeMenuView';
 import CashOutView from './components/CashOutView';
+import {
+  addSuperLikeNotification,
+  getNotificationsForUser,
+  getUnreadNotificationCount,
+  markAllNotificationsRead,
+  SUPER_LIKE_NOTIFICATION_EVENT,
+} from './notificationsStore';
 
 const DEFAULT_ME: User = {
   id: 'me',
@@ -71,6 +78,45 @@ const App: React.FC = () => {
     };
   });
   const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
+  const [notifTick, setNotifTick] = useState(0);
+  const [superLikeToast, setSuperLikeToast] = useState<string | null>(null);
+  const currentUserRef = useRef(state.currentUser);
+  currentUserRef.current = state.currentUser;
+
+  useEffect(() => {
+    const onSuperLikeEvent = (ev: Event) => {
+      const recipientId = (ev as CustomEvent<{ recipientId: string }>).detail?.recipientId;
+      if (recipientId && recipientId === currentUserRef.current.id) {
+        setSuperLikeToast('You received a Super Like!');
+        setNotifTick((t) => t + 1);
+        window.setTimeout(() => setSuperLikeToast(null), 4500);
+      }
+    };
+    window.addEventListener(SUPER_LIKE_NOTIFICATION_EVENT, onSuperLikeEvent);
+    return () => window.removeEventListener(SUPER_LIKE_NOTIFICATION_EVENT, onSuperLikeEvent);
+  }, []);
+
+  const profileViewPrev = useRef<View | null>(null);
+  useEffect(() => {
+    if (state.currentView === View.PROFILE && profileViewPrev.current !== View.PROFILE) {
+      markAllNotificationsRead(state.currentUser.id);
+      setNotifTick((t) => t + 1);
+    }
+    profileViewPrev.current = state.currentView;
+  }, [state.currentView, state.currentUser.id]);
+
+  const profileUnreadDot = useMemo(
+    () =>
+      state.currentUser
+        ? getUnreadNotificationCount(state.currentUser.id) > 0
+        : false,
+    [state.currentUser?.id, notifTick]
+  );
+  const profileSuperLikeNotifications = useMemo(
+    () =>
+      state.currentUser ? getNotificationsForUser(state.currentUser.id) : [],
+    [state.currentUser?.id, notifTick]
+  );
 
   const setView = (view: View) => {
     if (view === View.HOME) {
@@ -450,6 +496,7 @@ const App: React.FC = () => {
             onUpdateProfile={handleUpdateProfile}
             onPurchaseBadge={handlePurchaseBadge}
             onLogout={() => { clearAppSession(); setAppSessionState(null); }}
+            superLikeNotifications={profileSuperLikeNotifications}
           />
         );
       case View.USER_DETAIL:
@@ -464,6 +511,13 @@ const App: React.FC = () => {
             isFollowing={state.followingIds.includes(state.selectedUserForDetail.id)}
             onFollowToggle={() => toggleFollow(state.selectedUserForDetail!.id)}
             onFollowUser={ensureFollowing}
+            onSuperLikeSuccess={(recipient) => {
+              addSuperLikeNotification(recipient.id, {
+                id: state.currentUser.id,
+                name: state.currentUser.name,
+                avatar: state.currentUser.avatar,
+              });
+            }}
             onReport={() => {
               window.alert("Thanks — we'll review your report.");
             }}
@@ -501,6 +555,16 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-zinc-900 max-w-md mx-auto relative border-x border-zinc-200 shadow-2xl overflow-hidden">
+      {superLikeToast ? (
+        <div
+          className="pointer-events-none fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-[80] w-full max-w-md -translate-x-1/2 px-4 animate-in fade-in slide-in-from-top duration-300"
+          role="status"
+        >
+          <div className="rounded-2xl border border-pink-300/80 bg-gradient-to-r from-pink-600 to-rose-600 px-4 py-3 text-center text-sm font-bold text-white shadow-lg">
+            {superLikeToast}
+          </div>
+        </div>
+      ) : null}
       <main
         className={`flex-1 min-h-0 ${fullBleedMain ? 'relative flex flex-col min-h-[100dvh] h-[100dvh] overflow-hidden' : 'overflow-y-auto pb-28'}`}
         onScroll={handleMainScroll}
@@ -514,6 +578,7 @@ const App: React.FC = () => {
         tokenCount={state.tokens}
         liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled}
         hidden={isScrolling || isLiveView || isChatRoom || isVideoCall}
+        profileUnreadDot={profileUnreadDot}
       />
     </div>
   );

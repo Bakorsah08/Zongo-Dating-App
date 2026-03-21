@@ -7,6 +7,8 @@ interface NavbarProps {
   tokenCount: number;
   liveStreamingEnabled?: boolean;
   hidden?: boolean;
+  /** Pink dot on Profile when the current user has unread in-app notifications. */
+  profileUnreadDot?: boolean;
 }
 
 const iconSize = 'w-[1.9rem] h-[1.9rem]';
@@ -58,7 +60,13 @@ const ProfileSolidIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const Navbar: React.FC<NavbarProps> = ({ currentView, setView, liveStreamingEnabled = true, hidden = false }) => {
+const Navbar: React.FC<NavbarProps> = ({
+  currentView,
+  setView,
+  liveStreamingEnabled = true,
+  hidden = false,
+  profileUnreadDot = false,
+}) => {
   const inactive = 'text-white/55 hover:text-white/90';
   const active = 'text-pink-400';
 
@@ -116,10 +124,16 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, setView, liveStreamingEnab
         <button
           type="button"
           onClick={() => setView(View.PROFILE)}
-          className={`flex flex-1 flex-col items-center justify-center py-2 transition-colors ${currentView === View.PROFILE ? active : inactive}`}
+          className={`relative flex flex-1 flex-col items-center justify-center py-2 transition-colors ${currentView === View.PROFILE ? active : inactive}`}
           aria-label="Profile"
         >
           <ProfileSolidIcon className={iconSize} />
+          {profileUnreadDot ? (
+            <span
+              className="absolute top-1.5 right-[calc(50%-1.1rem)] h-2 min-w-2 rounded-full bg-pink-500 ring-2 ring-black"
+              aria-hidden
+            />
+          ) : null}
         </button>
       </div>
     </nav>

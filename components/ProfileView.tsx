@@ -1,7 +1,16 @@
 
 import React, { useRef, useState } from 'react';
-import { User, BadgeTier, PayoutDetails } from '../types';
+import { User, BadgeTier, PayoutDetails, AppNotification } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
+
+function formatRelativeTime(ts: number): string {
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 45) return 'Just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
 
 interface ProfileViewProps {
   user: User;
@@ -11,6 +20,8 @@ interface ProfileViewProps {
   onUpdateProfile: (updates: Partial<User>) => void;
   onPurchaseBadge?: (tier: BadgeTier) => boolean;
   onLogout?: () => void;
+  /** Super Like (and future) notifications for this profile owner. */
+  superLikeNotifications?: AppNotification[];
 }
 
 const MAX_PHOTOS = 8;
@@ -22,7 +33,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onUpdateAlbum, 
   onUpdateProfile,
   onPurchaseBadge,
-  onLogout
+  onLogout,
+  superLikeNotifications = [],
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +203,43 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           )}
         </div>
       </div>
+
+      {superLikeNotifications.length > 0 ? (
+        <div className="mb-8 rounded-3xl border border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 p-5 shadow-sm">
+          <h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-pink-900">Notifications</h4>
+          <ul className="space-y-2">
+            {superLikeNotifications.map((n) => (
+              <li
+                key={n.id}
+                className={`flex items-center gap-3 rounded-2xl border border-pink-100/80 bg-white px-3 py-3 ${
+                  n.read ? 'opacity-75' : 'shadow-sm'
+                }`}
+              >
+                <img
+                  src={n.fromAvatar || 'https://picsum.photos/seed/sl/80'}
+                  alt=""
+                  className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-pink-100"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-zinc-900">
+                    <span className="mr-1" aria-hidden>
+                      ⭐
+                    </span>
+                    {n.type === 'super_like' ? (
+                      <>
+                        <span className="text-pink-700">{n.fromName}</span> sent you a Super Like
+                      </>
+                    ) : (
+                      n.fromName
+                    )}
+                  </p>
+                  <p className="text-[11px] text-zinc-500">{formatRelativeTime(n.createdAt)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* VIP Badge Section */}
       {vipBadgesEnabled && (

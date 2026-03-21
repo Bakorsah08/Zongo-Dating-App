@@ -1,0 +1,81 @@
+import type { AppNotification } from './types';
+
+const STORAGE_KEY = 'zongo_app_notifications';
+const MAX_PER_USER = 100;
+
+export const SUPER_LIKE_NOTIFICATION_EVENT = 'zongo-super-like-notification';
+
+type StoreShape = Record<string, AppNotification[]>;
+
+function load(): StoreShape {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as unknown;
+    if (!p || typeof p !== 'object') return {};
+    return p as StoreShape;
+  } catch {
+    return {};
+  }
+}
+
+function save(data: StoreShape) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (_) {}
+}
+
+function newId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `n-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Record that `recipientId` received a Super Like from `from`. */
+export function addSuperLikeNotification(
+  recipientId: string,
+  from: { id: string; name: string; avatar: string }
+): void {
+  if (!recipientId || recipientId === from.id) return;
+  const all = load();
+  const list = all[recipientId] ?? [];
+  const n: AppNotification = {
+    id: newId(),
+    type: 'super_like',
+    fromUserId: from.id,
+    fromName: from.name.trim() || 'Someone',
+    fromAvatar: from.avatar || '',
+    createdAt: Date.now(),
+    read: false,
+  };
+  all[recipientId] = [n, ...list].slice(0, MAX_PER_USER);
+  save(all);
+  window.dispatchEvent(
+    new CustomEvent(SUPER_LIKE_NOTIFICATION_EVENT, { detail: { recipientId } })
+  );
+}
+
+export function getNotificationsForUser(userId: string): AppNotification[] {
+  const list = load()[userId];
+  return list ? [...list] : [];
+}
+
+export function getUnreadNotificationCount(userId: string): number {
+  return getNotificationsForUser(userId).filter((n) => !n.read).length;
+}
+
+export function markNotificationRead(userId: string, notificationId: string): void {
+  const all = load();
+  const list = all[userId];
+  if (!list) return;
+  all[userId] = list.map((n) => (n.id === notificationId ? { ...n, read: true } : n));
+  save(all);
+}
+
+export function markAllNotificationsRead(userId: string): void {
+  const all = load();
+  const list = all[userId];
+  if (!list?.length) return;
+  all[userId] = list.map((n) => ({ ...n, read: true }));
+  save(all);
+}

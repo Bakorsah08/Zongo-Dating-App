@@ -1,18 +1,91 @@
-import type { User, BadgeInfo, TokenPackage, Gift, MonetizationSettings, PayoutDetails, ExploreSpotlight } from '../types';
+import type {
+  User,
+  BadgeInfo,
+  TokenPackage,
+  Gift,
+  MonetizationSettings,
+  PayoutDetails,
+  ExploreCarouselAd,
+  ExploreCarouselConfig,
+} from '../types';
 import { MOCK_USERS, BADGE_TIERS, TOKEN_PACKAGES, GIFTS, DEFAULT_MONETIZATION_SETTINGS } from '../constants';
 
 const STORAGE_KEY = 'zongo_admin_data';
 
-export const DEFAULT_EXPLORE_SPOTLIGHT: ExploreSpotlight = {
-  enabled: false,
-  badgeLabel: 'Promo',
-  title: 'Featured on Zongo',
-  subtitle: 'Tap to see this week’s highlight',
-  imageUrl: '',
-  imageDataUrl: '',
-  backgroundColor: '',
-  linkUrl: '',
+function newAdId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `ad-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function normalizeExploreCarouselAd(a: Partial<ExploreCarouselAd> & { id: string }): ExploreCarouselAd {
+  return {
+    id: a.id,
+    enabled: Boolean(a.enabled),
+    badgeLabel: String(a.badgeLabel ?? 'Promo'),
+    title: String(a.title ?? ''),
+    subtitle: String(a.subtitle ?? ''),
+    imageUrl: String(a.imageUrl ?? ''),
+    imageDataUrl: String(a.imageDataUrl ?? ''),
+    backgroundColor: String(a.backgroundColor ?? ''),
+    linkUrl: String(a.linkUrl ?? ''),
+    displayDurationSec: Math.min(120, Math.max(3, Math.round(Number(a.displayDurationSec)) || 8)),
+  };
+}
+
+type LegacySpotlight = {
+  enabled?: boolean;
+  badgeLabel?: string;
+  title?: string;
+  subtitle?: string;
+  imageUrl?: string;
+  imageDataUrl?: string;
+  backgroundColor?: string;
+  linkUrl?: string;
 };
+
+function migrateLegacySpotlight(legacy: LegacySpotlight): ExploreCarouselConfig {
+  return {
+    ads: [
+      normalizeExploreCarouselAd({
+        id: 'migrated-1',
+        enabled: Boolean(legacy.enabled),
+        badgeLabel: legacy.badgeLabel,
+        title: legacy.title,
+        subtitle: legacy.subtitle,
+        imageUrl: legacy.imageUrl,
+        imageDataUrl: legacy.imageDataUrl,
+        backgroundColor: legacy.backgroundColor,
+        linkUrl: legacy.linkUrl,
+        displayDurationSec: 8,
+      }),
+    ],
+  };
+}
+
+function normalizeExploreCarousel(raw: unknown): ExploreCarouselConfig {
+  if (!raw || typeof raw !== 'object' || !Array.isArray((raw as ExploreCarouselConfig).ads)) {
+    return { ads: [] };
+  }
+  const ads = ((raw as ExploreCarouselConfig).ads as Partial<ExploreCarouselAd>[])
+    .filter((x) => x && typeof x === 'object' && typeof (x as ExploreCarouselAd).id === 'string')
+    .map((x) => normalizeExploreCarouselAd(x as ExploreCarouselAd));
+  return { ads };
+}
+
+export const DEFAULT_NEW_EXPLORE_AD = (): ExploreCarouselAd =>
+  normalizeExploreCarouselAd({
+    id: newAdId(),
+    enabled: false,
+    badgeLabel: 'Promo',
+    title: 'Featured on Zongo',
+    subtitle: "Tap to see this week's highlight",
+    imageUrl: '',
+    imageDataUrl: '',
+    backgroundColor: '',
+    linkUrl: '',
+    displayDurationSec: 8,
+  });
 
 export interface AdminData {
   users: User[];
@@ -26,15 +99,15 @@ export interface AdminData {
   platformTransferredOut: number;
   /** Platform owner's bank or mobile money details for withdrawals */
   platformPayoutDetails: PayoutDetails | null;
-  /** Explore first-card spotlight (ads / announcements). */
-  exploreSpotlight: ExploreSpotlight;
+  /** Explore first-tile carousel (ads / announcements). */
+  exploreCarousel: ExploreCarouselConfig;
 }
 
 function loadFromStorage(): AdminData | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as AdminData;
+    const data = JSON.parse(raw) as AdminData & { exploreSpotlight?: LegacySpotlight };
     if (!data.monetizationSettings) {
       data.monetizationSettings = { ...DEFAULT_MONETIZATION_SETTINGS };
     } else {
@@ -49,10 +122,12 @@ function loadFromStorage(): AdminData | null {
     if (!data.platformPayoutDetails) {
       data.platformPayoutDetails = null;
     }
-    if (!data.exploreSpotlight || typeof data.exploreSpotlight !== 'object') {
-      data.exploreSpotlight = { ...DEFAULT_EXPLORE_SPOTLIGHT };
+    const rawSpot = (data as { exploreSpotlight?: LegacySpotlight }).exploreSpotlight;
+    if (rawSpot && typeof rawSpot === 'object' && !(data as { exploreCarousel?: unknown }).exploreCarousel) {
+      data.exploreCarousel = migrateLegacySpotlight(rawSpot);
+      delete (data as { exploreSpotlight?: LegacySpotlight }).exploreSpotlight;
     } else {
-      data.exploreSpotlight = { ...DEFAULT_EXPLORE_SPOTLIGHT, ...data.exploreSpotlight };
+      data.exploreCarousel = normalizeExploreCarousel((data as { exploreCarousel?: unknown }).exploreCarousel);
     }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -80,7 +155,7 @@ const defaultData: AdminData = {
   platformRevenueFromTokenSales: 0,
   platformTransferredOut: 0,
   platformPayoutDetails: null,
-  exploreSpotlight: { ...DEFAULT_EXPLORE_SPOTLIGHT },
+  exploreCarousel: { ads: [] },
 };
 
 let cached: AdminData = loadFromStorage() ?? { ...defaultData };
@@ -121,17 +196,13 @@ export const adminStore = {
     return clone(cached.monetizationSettings);
   },
 
-  getExploreSpotlight(): ExploreSpotlight {
-    const s = cached.exploreSpotlight;
-    if (!s) return { ...DEFAULT_EXPLORE_SPOTLIGHT };
-    return { ...DEFAULT_EXPLORE_SPOTLIGHT, ...clone(s) };
+  getExploreCarousel(): ExploreCarouselConfig {
+    return clone(cached.exploreCarousel ?? { ads: [] });
   },
 
-  setExploreSpotlight(updates: Partial<ExploreSpotlight>) {
-    cached.exploreSpotlight = {
-      ...DEFAULT_EXPLORE_SPOTLIGHT,
-      ...(cached.exploreSpotlight || {}),
-      ...updates,
+  setExploreCarouselAds(ads: ExploreCarouselAd[]) {
+    cached.exploreCarousel = {
+      ads: ads.map((a) => normalizeExploreCarouselAd(a)),
     };
     saveToStorage(cached);
   },

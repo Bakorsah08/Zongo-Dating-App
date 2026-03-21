@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { getUsers, getBadges, getMonetizationSettings, getExploreSpotlight } from '../data';
-import type { ExploreSpotlight, User, UserGender } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { getUsers, getBadges, getMonetizationSettings, getExploreCarousel } from '../data';
+import type { User, UserGender } from '../types';
 
 interface DiscoverViewProps {
   userGender?: UserGender;
@@ -17,64 +17,109 @@ const getBadgeRank = (user: User): number => {
   return getBadges().find(b => b.id === tier)?.rank ?? 0;
 };
 
-/** Reserved first Explore grid cell — super-admin ads & announcements. */
-const ExploreSpotlightCard: React.FC<{ spotlight: ExploreSpotlight }> = ({ spotlight }) => {
-  const active = spotlight.enabled;
-  const badge = active ? (spotlight.badgeLabel.trim() || 'Promo') : 'Featured';
-  const title = active ? (spotlight.title.trim() || 'Zongo') : 'Zongo';
-  const subtitle = active ? (spotlight.subtitle.trim() || 'Promos & news') : 'Ads & announcements';
-  const imgSrc =
-    active && spotlight.imageDataUrl?.trim()
-      ? spotlight.imageDataUrl.trim()
-      : active && spotlight.imageUrl.trim()
-        ? spotlight.imageUrl.trim()
-        : '';
-  const bgColor =
-    active && spotlight.backgroundColor?.trim() ? spotlight.backgroundColor.trim() : '';
-  const link = spotlight.linkUrl.trim();
+/** First Explore grid cell — rotating carousel of live ads from Ad centre. */
+const ExploreCarouselTile: React.FC = () => {
+  const { ads } = getExploreCarousel();
+  const liveAds = ads.filter((a) => a.enabled);
+  const [idx, setIdx] = useState(0);
 
-  const handleActivate = () => {
-    if (!active || !link) return;
+  const liveSig = liveAds.map((a) => `${a.id}:${a.displayDurationSec}`).join('|');
+  useEffect(() => {
+    setIdx(0);
+  }, [liveSig]);
+
+  useEffect(() => {
+    if (liveAds.length <= 1) return;
+    const sec = Math.min(120, Math.max(3, liveAds[idx]?.displayDurationSec ?? 8));
+    const timer = window.setTimeout(() => {
+      setIdx((i) => (i + 1) % liveAds.length);
+    }, sec * 1000);
+    return () => window.clearTimeout(timer);
+  }, [idx, liveAds.length, liveAds[idx]?.id, liveAds[idx]?.displayDurationSec]);
+
+  const current = liveAds.length ? liveAds[idx] : null;
+  const link = current?.linkUrl.trim() ?? '';
+
+  const openLink = () => {
+    if (!current || !link) return;
     const url =
       link.startsWith('http://') || link.startsWith('https://') ? link : `https://${link}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  if (!current) {
+    return (
+      <div className="group relative aspect-[3/4] overflow-hidden rounded-[0.65rem] border border-white transition-transform active:scale-[0.99] cursor-default">
+        <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-violet-600 to-blue-600" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+        <div className="absolute left-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter text-zinc-900 shadow-sm">
+          Featured
+        </div>
+        <div className="absolute bottom-3 left-3 right-3">
+          <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">Zongo</h3>
+          <p className="text-[10px] text-zinc-200 drop-shadow-md line-clamp-2">Ads & announcements</p>
+        </div>
+      </div>
+    );
+  }
+
+  const imgSrc =
+    current.imageDataUrl?.trim() || current.imageUrl.trim()
+      ? (current.imageDataUrl?.trim() || current.imageUrl.trim())
+      : '';
+  const bgColor = current.backgroundColor?.trim() || '';
+
   return (
     <div
       role="button"
-      tabIndex={active && link ? 0 : undefined}
-      onClick={handleActivate}
+      tabIndex={link ? 0 : undefined}
+      onClick={openLink}
       onKeyDown={(e) => {
-        if (!active || !link) return;
+        if (!link) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          handleActivate();
+          openLink();
         }
       }}
       className={`group relative aspect-[3/4] overflow-hidden rounded-[0.65rem] border border-white transition-transform active:scale-[0.99] ${
-        active && link ? 'cursor-pointer' : 'cursor-default'
+        link ? 'cursor-pointer' : 'cursor-default'
       }`}
     >
-      {imgSrc ? (
-        <img
-          src={imgSrc}
-          alt=""
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-      ) : bgColor ? (
-        <div className="absolute inset-0" style={{ backgroundColor: bgColor }} />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-violet-600 to-blue-600" />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+      <div key={current.id} className="absolute inset-0 animate-in fade-in duration-500">
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : bgColor ? (
+          <div className="absolute inset-0" style={{ backgroundColor: bgColor }} />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-violet-600 to-blue-600" />
+        )}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none" />
       <div className="absolute left-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter text-zinc-900 shadow-sm">
-        {badge}
+        {current.badgeLabel.trim() || 'Promo'}
       </div>
       <div className="absolute bottom-3 left-3 right-3">
-        <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">{title}</h3>
-        <p className="text-[10px] text-zinc-200 drop-shadow-md line-clamp-2">{subtitle}</p>
+        <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">
+          {current.title.trim() || 'Zongo'}
+        </h3>
+        <p className="text-[10px] text-zinc-200 drop-shadow-md line-clamp-2">
+          {current.subtitle.trim() || 'Promos & news'}
+        </p>
       </div>
+      {liveAds.length > 1 ? (
+        <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-1.5 pointer-events-none">
+          {liveAds.map((a, i) => (
+            <span
+              key={a.id}
+              className={`h-1.5 w-1.5 rounded-full ${i === idx ? 'bg-white' : 'bg-white/35'}`}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -160,8 +205,6 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
   const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
   const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
   const areAnyFiltersActive = (profileType === 'human' && areHumanFiltersActive) || (profileType === 'ai' && areAIFiltersActive);
-  const exploreSpotlight = getExploreSpotlight();
-
   return (
     <div className="flex flex-col min-h-full bg-white">
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
@@ -316,7 +359,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
       )}
 
       <div className="grid w-full grid-cols-2 gap-[0.225rem] px-[0.15rem] pb-24 sm:gap-[0.3rem] sm:px-[0.3rem]">
-        <ExploreSpotlightCard spotlight={exploreSpotlight} />
+        <ExploreCarouselTile />
         {filteredUsers.length > 0 ? (
           filteredUsers.map((user) => (
             <div 

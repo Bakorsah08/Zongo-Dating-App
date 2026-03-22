@@ -29,6 +29,9 @@ interface ProfileViewProps {
 const MAX_PHOTOS = 8;
 const USER_AD_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
+/** When the album is empty after a delete, keep a valid avatar URL. */
+const EMPTY_ALBUM_AVATAR_PLACEHOLDER = 'https://picsum.photos/seed/zongo-empty-album/400/400';
+
 const ProfileView: React.FC<ProfileViewProps> = ({ 
   user, 
   tokens, 
@@ -106,6 +109,41 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const handleSelectPhoto = (photoUrl: string) => {
     onUpdateProfile({ avatar: photoUrl });
     setShowAvatarPicker(false);
+  };
+
+  const removeAlbumPhotoAtIndex = (idx: number) => {
+    if (idx < 0 || idx >= user.album.length) return;
+    const removed = user.album[idx];
+    if (removed.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(removed);
+      } catch {
+        /* ignore */
+      }
+    }
+    const newAlbum = user.album.filter((_, i) => i !== idx);
+    if (removed === user.avatar) {
+      onUpdateProfile({
+        avatar: newAlbum[0] ?? EMPTY_ALBUM_AVATAR_PLACEHOLDER,
+      });
+    }
+    onUpdateAlbum(newAlbum);
+    if (viewingIndex !== null) {
+      if (viewingIndex === idx) {
+        setViewingIndex(newAlbum.length ? Math.min(idx, newAlbum.length - 1) : null);
+      } else if (viewingIndex > idx) {
+        setViewingIndex(viewingIndex - 1);
+      }
+    }
+  };
+
+  const confirmRemoveAlbumPhoto = (idx: number) => {
+    const isProfile = user.album[idx] === user.avatar;
+    const msg = isProfile
+      ? 'Remove this photo? It is your profile picture — your profile will use another photo or a placeholder if none are left.'
+      : 'Remove this photo from your album?';
+    if (!window.confirm(msg)) return;
+    removeAlbumPhotoAtIndex(idx);
   };
 
   const saveBio = () => {
@@ -706,28 +744,46 @@ const ProfileView: React.FC<ProfileViewProps> = ({
               onChange={handleFileChange}
             />
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
             {user.album.map((img, idx) => (
-              <div 
-                key={idx} 
-                onClick={() => setViewingIndex(idx)}
-                className="group relative aspect-square cursor-pointer overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 transition-transform active:scale-95"
+              <div
+                key={idx}
+                className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 sm:rounded-xl"
               >
-                <img src={img} className="h-full w-full object-cover" />
-                {img === user.avatar && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-                    <span className="rounded bg-pink-600 px-2 py-0.5 text-xs font-bold text-white">Profile</span>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setViewingIndex(idx)}
+                  className="relative h-full w-full cursor-pointer transition-transform active:scale-95"
+                >
+                  <img src={img} alt="" className="h-full w-full object-cover" />
+                  {img === user.avatar && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35">
+                      <span className="rounded bg-pink-600 px-1 py-0.5 text-[10px] font-bold text-white sm:px-2 sm:text-xs">
+                        Profile
+                      </span>
+                    </div>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    confirmRemoveAlbumPhoto(idx);
+                  }}
+                  className="absolute right-0.5 top-0.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-xs font-bold text-white shadow-sm ring-1 ring-white/30 transition-colors hover:bg-red-600 sm:h-7 sm:w-7 sm:right-1 sm:top-1"
+                  aria-label="Remove photo"
+                >
+                  ×
+                </button>
               </div>
             ))}
             {!isLimitReached && (
               <div 
                 onClick={handleUploadClick}
-                className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 text-zinc-500 transition-colors hover:border-pink-300 hover:text-pink-600"
+                className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 text-zinc-500 transition-colors hover:border-pink-300 hover:text-pink-600 sm:rounded-xl"
               >
-                <span className="text-2xl">+</span>
-                <span className="text-[10px] font-bold">Upload</span>
+                <span className="text-lg sm:text-2xl">+</span>
+                <span className="text-[9px] font-bold sm:text-[10px]">Upload</span>
               </div>
             )}
           </div>
@@ -763,7 +819,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="mx-auto mb-6 h-1.5 w-12 rounded-full bg-zinc-300"></div>
             <h3 className="mb-6 text-center text-sm font-black uppercase tracking-widest text-zinc-500">Select New Profile Photo</h3>
             {user.album.length > 0 ? (
-              <div className="grid max-h-[40vh] grid-cols-3 gap-3 overflow-y-auto">
+              <div className="grid max-h-[40vh] grid-cols-4 gap-2 overflow-y-auto sm:gap-3">
                 {user.album.map((img, idx) => (
                   <div 
                     key={idx} 
@@ -805,7 +861,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
               {user.album.length > 0 && (
                 <>
                   <p className="text-xs font-bold uppercase text-zinc-500">Or choose from album</p>
-                  <div className="grid max-h-40 grid-cols-3 gap-2 overflow-y-auto">
+                  <div className="grid max-h-40 grid-cols-4 gap-1.5 overflow-y-auto sm:gap-2">
                     {user.album.map((img, idx) => (
                       <button
                         key={idx}
@@ -899,15 +955,30 @@ const ProfileView: React.FC<ProfileViewProps> = ({
             ✕
           </button>
           
-          <div className="absolute top-6 left-6 z-10">
+          <div className="absolute top-6 left-6 z-10 flex max-w-[70%] flex-col gap-2 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center">
             {user.album[viewingIndex] !== user.avatar && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleAvatarFromAlbum(user.album[viewingIndex]); setViewingIndex(null); }}
-                className="bg-pink-500 px-3 py-1.5 rounded-full text-xs font-bold"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAvatarFromAlbum(user.album[viewingIndex]);
+                  setViewingIndex(null);
+                }}
+                className="rounded-full bg-pink-500 px-3 py-1.5 text-left text-xs font-bold text-white"
               >
                 Set as profile pic
               </button>
             )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                confirmRemoveAlbumPhoto(viewingIndex);
+              }}
+              className="rounded-full bg-red-600/90 px-3 py-1.5 text-left text-xs font-bold text-white ring-1 ring-white/20 hover:bg-red-600"
+            >
+              Remove from album
+            </button>
           </div>
           
           <div className="relative w-full h-full flex items-center justify-center p-4">

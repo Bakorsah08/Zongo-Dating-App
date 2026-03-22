@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, User, AppState } from './types';
 import { getUsers, getBadges, getMonetizationSettings } from './data';
 import { adminStore } from './admin/store';
@@ -13,6 +13,7 @@ import LiveStreamView from './components/LiveStreamView';
 import TokenShopView from './components/TokenShopView';
 import Navbar from './components/Navbar';
 import ProfileView from './components/ProfileView';
+import NotificationBell from './components/NotificationBell';
 import UserDetailView from './components/UserDetailView';
 import HomeMenuView from './components/HomeMenuView';
 import CashOutView from './components/CashOutView';
@@ -22,6 +23,7 @@ import {
   getUnreadNotificationCount,
   markAllNotificationsRead,
   SUPER_LIKE_NOTIFICATION_EVENT,
+  APP_NOTIFICATION_UPDATED_EVENT,
 } from './notificationsStore';
 
 const DEFAULT_ME: User = {
@@ -79,9 +81,33 @@ const App: React.FC = () => {
   });
   const [isHomeMenuOpen, setIsHomeMenuOpen] = useState(false);
   const [notifTick, setNotifTick] = useState(0);
+  const [userAdSubmissionsTick, setUserAdSubmissionsTick] = useState(0);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [superLikeToast, setSuperLikeToast] = useState<string | null>(null);
   const currentUserRef = useRef(state.currentUser);
   currentUserRef.current = state.currentUser;
+
+  useEffect(() => {
+    const c = adminStore.consumePendingTokenCredits(state.currentUser.id);
+    if (c > 0) {
+      setState((prev) => ({ ...prev, tokens: prev.tokens + c }));
+    }
+  }, [state.currentUser.id]);
+
+  useEffect(() => {
+    if (adminStore.processExpiredUserAds()) {
+      setNotifTick((t) => t + 1);
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (adminStore.processExpiredUserAds()) {
+        setNotifTick((t) => t + 1);
+      }
+    }, 25000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const onSuperLikeEvent = (ev: Event) => {
@@ -92,30 +118,79 @@ const App: React.FC = () => {
         window.setTimeout(() => setSuperLikeToast(null), 4500);
       }
     };
+    const onAppNotif = (ev: Event) => {
+      const recipientId = (ev as CustomEvent<{ recipientId: string }>).detail?.recipientId;
+      if (recipientId && recipientId === currentUserRef.current.id) {
+        setNotifTick((t) => t + 1);
+      }
+    };
     window.addEventListener(SUPER_LIKE_NOTIFICATION_EVENT, onSuperLikeEvent);
-    return () => window.removeEventListener(SUPER_LIKE_NOTIFICATION_EVENT, onSuperLikeEvent);
+    window.addEventListener(APP_NOTIFICATION_UPDATED_EVENT, onAppNotif);
+    return () => {
+      window.removeEventListener(SUPER_LIKE_NOTIFICATION_EVENT, onSuperLikeEvent);
+      window.removeEventListener(APP_NOTIFICATION_UPDATED_EVENT, onAppNotif);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'zongo_app_notifications') {
+        setNotifTick((t) => t + 1);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const profileViewPrev = useRef<View | null>(null);
   useEffect(() => {
     if (state.currentView === View.PROFILE && profileViewPrev.current !== View.PROFILE) {
-      markAllNotificationsRead(state.currentUser.id);
-      setNotifTick((t) => t + 1);
+      adminStore.hydrateFromLocalStorage();
+      setUserAdSubmissionsTick((t) => t + 1);
     }
     profileViewPrev.current = state.currentView;
   }, [state.currentView, state.currentUser.id]);
 
-  const profileUnreadDot = useMemo(
+  const notifUnreadCount = useMemo(
     () =>
-      state.currentUser
-        ? getUnreadNotificationCount(state.currentUser.id) > 0
-        : false,
+      state.currentUser ? getUnreadNotificationCount(state.currentUser.id) : 0,
     [state.currentUser?.id, notifTick]
   );
-  const profileSuperLikeNotifications = useMemo(
+
+  const currentUserId = state.currentUser?.id;
+  const handleNotifBellToggle = useCallback(() => {
+    setNotifPanelOpen((prev) => {
+      if (!prev && currentUserId) {
+        markAllNotificationsRead(currentUserId);
+        setNotifTick((t) => t + 1);
+      }
+      return !prev;
+    });
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const v = state.currentView;
+    if (
+      v === View.LIVE_STREAM ||
+      v === View.HOST_LIVE ||
+      v === View.CHAT_ROOM ||
+      v === View.VIDEO_CALL
+    ) {
+      setNotifPanelOpen(false);
+    }
+  }, [state.currentView]);
+  const profileInAppNotifications = useMemo(
     () =>
       state.currentUser ? getNotificationsForUser(state.currentUser.id) : [],
     [state.currentUser?.id, notifTick]
+  );
+
+  const userAdSubmissions = useMemo(
+    () =>
+      state.currentUser
+        ? adminStore.getUserAdSubmissionsForUser(state.currentUser.id)
+        : [],
+    [state.currentUser?.id, userAdSubmissionsTick]
   );
 
   const setView = (view: View) => {
@@ -241,6 +316,36 @@ const App: React.FC = () => {
     if (priceUsd != null && priceUsd > 0) {
       adminStore.addPlatformRevenueFromTokenSales(priceUsd);
     }
+  };
+
+  const handleSubmitUserAd = (payload: {
+    tierId: string;
+    durationDays: number;
+    title: string;
+    subtitle: string;
+    badgeLabel: string;
+    imageUrl: string;
+    imageDataUrl: string;
+    backgroundColor: string;
+    linkUrl: string;
+    displayDurationSec: number;
+  }): { success: boolean; error?: string } => {
+    const settings = getMonetizationSettings();
+    const tier = settings.userAdDurationTiers.find((t) => t.id === payload.tierId);
+    if (!tier) return { success: false, error: 'Invalid ad option.' };
+    const cost = tier.tokenCost;
+    if (!deductTokens(cost)) return { success: false, error: 'Not enough tokens.' };
+    const r = adminStore.submitUserAdSubmission({
+      ...payload,
+      userId: state.currentUser.id,
+      tokensPaid: cost,
+    });
+    if (!r.ok) {
+      addTokens(cost);
+      return { success: false, error: r.error };
+    }
+    setUserAdSubmissionsTick((t) => t + 1);
+    return { success: true };
   };
 
   const addEarnings = (amount: number) => {
@@ -496,7 +601,8 @@ const App: React.FC = () => {
             onUpdateProfile={handleUpdateProfile}
             onPurchaseBadge={handlePurchaseBadge}
             onLogout={() => { clearAppSession(); setAppSessionState(null); }}
-            superLikeNotifications={profileSuperLikeNotifications}
+            onSubmitUserAd={handleSubmitUserAd}
+            userAdSubmissions={userAdSubmissions}
           />
         );
       case View.USER_DETAIL:
@@ -572,13 +678,21 @@ const App: React.FC = () => {
         {renderView()}
       </main>
 
+      {!fullBleedMain ? (
+        <NotificationBell
+          notifications={profileInAppNotifications}
+          unreadCount={notifUnreadCount}
+          isOpen={notifPanelOpen}
+          onToggle={handleNotifBellToggle}
+        />
+      ) : null}
+
       <Navbar
         currentView={state.currentView}
         setView={setView}
         tokenCount={state.tokens}
         liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled}
         hidden={isScrolling || isLiveView || isChatRoom || isVideoCall}
-        profileUnreadDot={profileUnreadDot}
       />
     </div>
   );

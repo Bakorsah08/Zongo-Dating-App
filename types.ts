@@ -48,6 +48,34 @@ export interface User {
   gender?: UserGender; // For explore filtering (male sees females, female sees males)
 }
 
+/** Predetermined Explore ad run length + token price (set in Monetization; up to 10 tiers). */
+export interface UserAdDurationTier {
+  id: string;
+  durationDays: number;
+  tokenCost: number;
+}
+
+/** User-submitted Explore carousel ad — moderation queue + billing metadata. */
+export interface UserAdSubmission {
+  id: string;
+  userId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  title: string;
+  subtitle: string;
+  badgeLabel: string;
+  imageUrl: string;
+  imageDataUrl: string;
+  backgroundColor: string;
+  linkUrl: string;
+  displayDurationSec: number;
+  durationDays: number;
+  tokensPaid: number;
+  createdAt: number;
+  reviewedAt?: number;
+  /** Set when approved — slide id in explore carousel. */
+  carouselAdId?: string;
+}
+
 /** One slide in the Explore first-tile carousel (Ad centre). */
 export interface ExploreCarouselAd {
   id: string;
@@ -62,6 +90,14 @@ export interface ExploreCarouselAd {
   linkUrl: string;
   /** Seconds to show this slide before advancing (carousel uses 3–120). */
   displayDurationSec: number;
+  /** Platform = created in Ad centre; user = approved user submission. */
+  source?: 'platform' | 'user';
+  userSubmissionId?: string;
+  submittedByUserId?: string;
+  campaignDurationDays?: number;
+  /** When the ad was set live; used with campaignDurationDays for expiry. */
+  campaignStartedAt?: number;
+  campaignEndsAt?: number;
 }
 
 export interface ExploreCarouselConfig {
@@ -70,16 +106,20 @@ export interface ExploreCarouselConfig {
 }
 
 /** In-app notification stored per recipient user id (e.g. Super Like). */
-export type AppNotificationType = 'super_like';
+export type AppNotificationType = 'super_like' | 'system';
 
 export interface AppNotification {
   id: string;
   type: AppNotificationType;
-  fromUserId: string;
-  fromName: string;
-  fromAvatar: string;
   createdAt: number;
   read: boolean;
+  /** Super Like sender */
+  fromUserId?: string;
+  fromName?: string;
+  fromAvatar?: string;
+  /** system — user ads, moderation, etc. */
+  systemKind?: 'user_ad_expired' | 'user_ad_rejected' | 'user_ad_approved' | 'admin_broadcast';
+  systemMessage?: string;
 }
 
 export interface Message {
@@ -144,6 +184,8 @@ export interface MonetizationSettings {
   /** Tokens charged each billing tick (~10s) during an active call, after the upfront connection cost. */
   videoCallPerIntervalTokens: number;
   superLikeTokens: number;
+  /** Token cost per calendar-day duration for user-submitted Explore ads (tiers are fixed; admin sets prices). */
+  userAdDurationTiers: UserAdDurationTier[];
   liveStreamingEnabled: boolean;
   giftingEnabled: boolean;
   videoCallEnabled: boolean;

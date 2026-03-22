@@ -15,6 +15,7 @@ import TokensPage from './admin/TokensPage';
 import GiftsPage from './admin/GiftsPage';
 import AdminsPage from './admin/AdminsPage';
 import AdsCentrePage from './admin/AdsCentrePage';
+import NotificationCentrePage from './admin/NotificationCentrePage';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -43,6 +44,14 @@ root.render(
               element={
                 <ProtectedRoute requiredPermission="manage_explore_ads">
                   <AdsCentrePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="notifications"
+              element={
+                <ProtectedRoute requiredPermission="send_app_notifications">
+                  <NotificationCentrePage />
                 </ProtectedRoute>
               }
             />

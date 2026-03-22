@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import type { MonetizationSettings } from '../types';
+import type { MonetizationSettings, UserAdDurationTier } from '../types';
 import { adminStore } from './store';
+import { useAuthContext } from '../auth/AuthContext';
+
+const MAX_USER_AD_TIERS = 10;
+
+function newTierId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `uadt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 const MonetizationPage: React.FC = () => {
+  const { session } = useAuthContext();
+  const isSuperAdmin = session?.user.role === 'super_admin';
   const [settings, setSettings] = useState<MonetizationSettings | null>(null);
 
   const load = () => setSettings(adminStore.getMonetizationSettings());
@@ -81,6 +92,100 @@ const MonetizationPage: React.FC = () => {
                 className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
               />
             </div>
+          </div>
+          <div className="mt-8 pt-6 border-t border-zinc-800">
+            <h3 className="text-sm font-bold text-zinc-300 mb-2">User Explore ads (campaign length &amp; cost)</h3>
+            <p className="text-xs text-zinc-500 mb-4">
+              Define up to {MAX_USER_AD_TIERS} pricing options. Users choose one from a dropdown when they submit an ad.
+              They pay tokens on submit; rejected ads are refunded.{' '}
+              <span className="text-zinc-400">
+                Only the super admin can add, remove, or edit campaign length (days). Anyone with this page can set token
+                costs.
+              </span>
+            </p>
+            {!isSuperAdmin ? (
+              <p className="text-xs text-amber-400/90 mb-3">
+                You are signed in as {session?.user.role?.replace('_', ' ') ?? 'admin'}. Add/remove options and change
+                duration require a super admin account.
+              </p>
+            ) : null}
+            <div className="space-y-3">
+              {[...settings.userAdDurationTiers]
+                .sort((a, b) => a.durationDays - b.durationDays)
+                .map((tier) => (
+                  <div
+                    key={tier.id}
+                    className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-800/40 p-3"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">Length (days)</span>
+                      {isSuperAdmin ? (
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={tier.durationDays}
+                          onChange={(e) => {
+                            const durationDays = Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1));
+                            const next = settings.userAdDurationTiers.map((t) =>
+                              t.id === tier.id ? { ...t, durationDays } : t
+                            );
+                            handleSave({ userAdDurationTiers: next });
+                          }}
+                          className="w-24 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-sm"
+                        />
+                      ) : (
+                        <span className="text-sm text-zinc-200 py-2">{tier.durationDays} days</span>
+                      )}
+                    </div>
+                    <label className="flex flex-col gap-1 text-sm text-zinc-500">
+                      <span className="text-[10px] uppercase tracking-wide">Tokens</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={tier.tokenCost}
+                        onChange={(e) => {
+                          const tokenCost = Math.max(0, parseInt(e.target.value, 10) || 0);
+                          const next = settings.userAdDurationTiers.map((t) =>
+                            t.id === tier.id ? { ...t, tokenCost } : t
+                          );
+                          handleSave({ userAdDurationTiers: next });
+                        }}
+                        className="w-28 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                      />
+                    </label>
+                    {isSuperAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = settings.userAdDurationTiers.filter((t) => t.id !== tier.id);
+                          handleSave({ userAdDurationTiers: next });
+                        }}
+                        className="ml-auto text-xs font-bold text-red-400 hover:text-red-300 px-2 py-2"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+            </div>
+            {isSuperAdmin ? (
+              <button
+                type="button"
+                disabled={settings.userAdDurationTiers.length >= MAX_USER_AD_TIERS}
+                onClick={() => {
+                  if (settings.userAdDurationTiers.length >= MAX_USER_AD_TIERS) return;
+                  const next: UserAdDurationTier[] = [
+                    ...settings.userAdDurationTiers,
+                    { id: newTierId(), durationDays: 7, tokenCost: 50 },
+                  ];
+                  handleSave({ userAdDurationTiers: next });
+                }}
+                className="mt-4 rounded-xl border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-bold text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                Add pricing option ({settings.userAdDurationTiers.length}/{MAX_USER_AD_TIERS})
+              </button>
+            ) : null}
           </div>
         </section>
 

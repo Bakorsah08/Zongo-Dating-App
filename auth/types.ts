@@ -9,6 +9,7 @@ export type Permission =
   | 'reset_data'
   | 'manage_admins'
   | 'manage_explore_ads'
+  | 'send_app_notifications'
   | 'view_dashboard';
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -22,6 +23,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'reset_data',
     'manage_admins',
     'manage_explore_ads',
+    'send_app_notifications',
   ],
   admin: [
     'view_dashboard',
@@ -30,6 +32,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'manage_tokens',
     'manage_gifts',
     'manage_monetization',
+    'send_app_notifications',
   ],
   moderator: ['view_dashboard', 'manage_users'],
 };

@@ -7,10 +7,22 @@ import type {
   PayoutDetails,
   ExploreCarouselAd,
   ExploreCarouselConfig,
+  UserAdSubmission,
+  UserAdDurationTier,
 } from '../types';
-import { MOCK_USERS, BADGE_TIERS, TOKEN_PACKAGES, GIFTS, DEFAULT_MONETIZATION_SETTINGS } from '../constants';
+import {
+  MOCK_USERS,
+  BADGE_TIERS,
+  TOKEN_PACKAGES,
+  GIFTS,
+  DEFAULT_MONETIZATION_SETTINGS,
+  DEFAULT_USER_AD_DURATION_TIERS,
+} from '../constants';
+import { addUserAdSystemNotification } from '../notificationsStore';
 
 const STORAGE_KEY = 'zongo_admin_data';
+
+const USER_AD_DAY_MS = 86400000;
 
 function newAdId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -18,8 +30,38 @@ function newAdId(): string {
     : `ad-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function newUserSubmissionId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `uad-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function newUserAdTierId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `uadt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Ensures each tier has an id and sane numbers; caps at 10. Legacy rows without id get new ids. */
+export function normalizeUserAdDurationTiers(raw: unknown): UserAdDurationTier[] {
+  if (!Array.isArray(raw)) {
+    return DEFAULT_USER_AD_DURATION_TIERS.map((t) => ({ ...t }));
+  }
+  if (raw.length === 0) return [];
+  const out: UserAdDurationTier[] = [];
+  for (let i = 0; i < raw.length && out.length < 10; i++) {
+    const t = raw[i] as Partial<UserAdDurationTier>;
+    const durationDays = Math.max(1, Math.min(365, Math.round(Number(t.durationDays)) || 1));
+    const tokenCost = Math.max(0, Math.round(Number(t.tokenCost)) || 0);
+    const id = typeof t.id === 'string' && t.id.trim() ? t.id.trim() : newUserAdTierId();
+    out.push({ id, durationDays, tokenCost });
+  }
+  return out;
+}
+
 export function normalizeExploreCarouselAd(a: Partial<ExploreCarouselAd> & { id: string }): ExploreCarouselAd {
-  return {
+  const source: 'platform' | 'user' = a.source === 'user' ? 'user' : 'platform';
+  const base = {
     id: a.id,
     enabled: Boolean(a.enabled),
     badgeLabel: String(a.badgeLabel ?? 'Promo'),
@@ -30,6 +72,31 @@ export function normalizeExploreCarouselAd(a: Partial<ExploreCarouselAd> & { id:
     backgroundColor: String(a.backgroundColor ?? ''),
     linkUrl: String(a.linkUrl ?? ''),
     displayDurationSec: Math.min(120, Math.max(3, Math.round(Number(a.displayDurationSec)) || 8)),
+    source,
+  } as ExploreCarouselAd;
+  if (source === 'user') {
+    base.userSubmissionId = a.userSubmissionId ? String(a.userSubmissionId) : undefined;
+    base.submittedByUserId = a.submittedByUserId ? String(a.submittedByUserId) : undefined;
+    base.campaignDurationDays =
+      typeof a.campaignDurationDays === 'number' && a.campaignDurationDays > 0
+        ? Math.round(a.campaignDurationDays)
+        : undefined;
+    base.campaignStartedAt = typeof a.campaignStartedAt === 'number' ? a.campaignStartedAt : undefined;
+    base.campaignEndsAt = typeof a.campaignEndsAt === 'number' ? a.campaignEndsAt : undefined;
+  }
+  return base;
+}
+
+/** When toggling Live on Explore for a user-submitted slide, set campaign window from now. */
+export function computeUserAdLiveToggle(ad: ExploreCarouselAd, enabled: boolean): Partial<ExploreCarouselAd> {
+  if (ad.source !== 'user') return { enabled };
+  if (!enabled) return { enabled: false };
+  const days = Math.max(1, ad.campaignDurationDays ?? 7);
+  const now = Date.now();
+  return {
+    enabled: true,
+    campaignStartedAt: now,
+    campaignEndsAt: now + days * USER_AD_DAY_MS,
   };
 }
 
@@ -101,6 +168,10 @@ export interface AdminData {
   platformPayoutDetails: PayoutDetails | null;
   /** Explore first-tile carousel (ads / announcements). */
   exploreCarousel: ExploreCarouselConfig;
+  /** User-submitted Explore ads awaiting review or history. */
+  userAdSubmissions: UserAdSubmission[];
+  /** Refund credits when an ad is rejected (consumed on next app load for that user). */
+  pendingTokenCreditsByUserId: Record<string, number>;
 }
 
 function loadFromStorage(): AdminData | null {
@@ -112,6 +183,18 @@ function loadFromStorage(): AdminData | null {
       data.monetizationSettings = { ...DEFAULT_MONETIZATION_SETTINGS };
     } else {
       data.monetizationSettings = { ...DEFAULT_MONETIZATION_SETTINGS, ...data.monetizationSettings };
+    }
+    const tiers = data.monetizationSettings.userAdDurationTiers;
+    if (!Array.isArray(tiers)) {
+      data.monetizationSettings.userAdDurationTiers = [...DEFAULT_USER_AD_DURATION_TIERS];
+    } else {
+      data.monetizationSettings.userAdDurationTiers = normalizeUserAdDurationTiers(tiers);
+    }
+    if (!Array.isArray(data.userAdSubmissions)) {
+      data.userAdSubmissions = [];
+    }
+    if (!data.pendingTokenCreditsByUserId || typeof data.pendingTokenCreditsByUserId !== 'object') {
+      data.pendingTokenCreditsByUserId = {};
     }
     if (typeof data.platformRevenueFromTokenSales !== 'number') {
       data.platformRevenueFromTokenSales = 0;
@@ -138,9 +221,14 @@ function loadFromStorage(): AdminData | null {
   }
 }
 
+export const ADMIN_DATA_CHANGED_EVENT = 'zongo-admin-data-changed';
+
 function saveToStorage(data: AdminData) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(ADMIN_DATA_CHANGED_EVENT));
+    }
   } catch (e) {
     console.error('Failed to save admin data:', e);
   }
@@ -156,6 +244,8 @@ const defaultData: AdminData = {
   platformTransferredOut: 0,
   platformPayoutDetails: null,
   exploreCarousel: { ads: [] },
+  userAdSubmissions: [],
+  pendingTokenCreditsByUserId: {},
 };
 
 let cached: AdminData = loadFromStorage() ?? { ...defaultData };
@@ -166,6 +256,17 @@ function clone<T>(x: T): T {
 }
 
 export const adminStore = {
+  /**
+   * Reload `cached` from localStorage. Required when another tab/window saved admin data;
+   * otherwise getters keep returning stale in-memory state.
+   */
+  hydrateFromLocalStorage(): void {
+    const fresh = loadFromStorage();
+    if (fresh) {
+      cached = fresh;
+    }
+  },
+
   getData(): AdminData {
     return clone(cached);
   },
@@ -193,7 +294,9 @@ export const adminStore = {
   },
 
   getMonetizationSettings(): MonetizationSettings {
-    return clone(cached.monetizationSettings);
+    const m = clone(cached.monetizationSettings);
+    m.userAdDurationTiers = normalizeUserAdDurationTiers(m.userAdDurationTiers);
+    return m;
   },
 
   getExploreCarousel(): ExploreCarouselConfig {
@@ -235,7 +338,10 @@ export const adminStore = {
   },
 
   setMonetizationSettings(settings: MonetizationSettings) {
-    cached.monetizationSettings = settings;
+    cached.monetizationSettings = {
+      ...settings,
+      userAdDurationTiers: normalizeUserAdDurationTiers(settings.userAdDurationTiers),
+    };
     saveToStorage(cached);
   },
 
@@ -319,6 +425,153 @@ export const adminStore = {
   deleteGift(id: string) {
     cached.gifts = cached.gifts.filter((g) => g.id !== id);
     saveToStorage(cached);
+  },
+
+  getUserAdSubmissions(): UserAdSubmission[] {
+    return clone(cached.userAdSubmissions ?? []);
+  },
+
+  getUserAdSubmissionsForUser(userId: string): UserAdSubmission[] {
+    return (cached.userAdSubmissions ?? []).filter((s) => s.userId === userId).map((s) => ({ ...s }));
+  },
+
+  submitUserAdSubmission(payload: {
+    userId: string;
+    tierId: string;
+    durationDays: number;
+    tokensPaid: number;
+    title: string;
+    subtitle: string;
+    badgeLabel: string;
+    imageUrl: string;
+    imageDataUrl: string;
+    backgroundColor: string;
+    linkUrl: string;
+    displayDurationSec: number;
+  }): { ok: true; id: string } | { ok: false; error: string } {
+    const tiers = normalizeUserAdDurationTiers(cached.monetizationSettings.userAdDurationTiers);
+    const tier = tiers.find((t) => t.id === payload.tierId);
+    if (!tier) return { ok: false, error: 'Invalid ad pricing option.' };
+    if (tier.durationDays !== payload.durationDays || tier.tokenCost !== payload.tokensPaid) {
+      return { ok: false, error: 'Ad cost does not match the selected option.' };
+    }
+    const sub: UserAdSubmission = {
+      id: newUserSubmissionId(),
+      userId: payload.userId,
+      status: 'pending',
+      title: payload.title.trim(),
+      subtitle: payload.subtitle.trim(),
+      badgeLabel: payload.badgeLabel.trim() || 'Promo',
+      imageUrl: payload.imageUrl.trim(),
+      imageDataUrl: payload.imageDataUrl.trim(),
+      backgroundColor: payload.backgroundColor.trim(),
+      linkUrl: payload.linkUrl.trim(),
+      displayDurationSec: Math.min(120, Math.max(3, Math.round(payload.displayDurationSec) || 8)),
+      durationDays: payload.durationDays,
+      tokensPaid: payload.tokensPaid,
+      createdAt: Date.now(),
+    };
+    if (!cached.userAdSubmissions) cached.userAdSubmissions = [];
+    cached.userAdSubmissions.push(sub);
+    saveToStorage(cached);
+    return { ok: true, id: sub.id };
+  },
+
+  /** Returns new carousel slide id so the UI can select it after refresh. */
+  approveUserAdSubmission(submissionId: string): string | null {
+    if (!cached.userAdSubmissions) cached.userAdSubmissions = [];
+    const idx = cached.userAdSubmissions.findIndex((s) => s.id === submissionId && s.status === 'pending');
+    if (idx < 0) return null;
+    const s = cached.userAdSubmissions[idx];
+    const slide = normalizeExploreCarouselAd({
+      id: newAdId(),
+      enabled: false,
+      badgeLabel: s.badgeLabel,
+      title: s.title,
+      subtitle: s.subtitle,
+      imageUrl: s.imageUrl,
+      imageDataUrl: s.imageDataUrl,
+      backgroundColor: s.backgroundColor,
+      linkUrl: s.linkUrl,
+      displayDurationSec: s.displayDurationSec,
+      source: 'user',
+      userSubmissionId: s.id,
+      submittedByUserId: s.userId,
+      campaignDurationDays: s.durationDays,
+    });
+    cached.exploreCarousel = {
+      ads: [...(cached.exploreCarousel?.ads ?? []), slide].map((a) => normalizeExploreCarouselAd(a)),
+    };
+    cached.userAdSubmissions[idx] = {
+      ...s,
+      status: 'approved',
+      reviewedAt: Date.now(),
+      carouselAdId: slide.id,
+    };
+    saveToStorage(cached);
+    addUserAdSystemNotification(
+      s.userId,
+      'user_ad_approved',
+      'Your Explore ad was approved. An admin can set it live on Explore when ready.'
+    );
+    return slide.id;
+  },
+
+  rejectUserAdSubmission(submissionId: string): boolean {
+    if (!cached.userAdSubmissions) cached.userAdSubmissions = [];
+    const idx = cached.userAdSubmissions.findIndex((s) => s.id === submissionId && s.status === 'pending');
+    if (idx < 0) return false;
+    const s = cached.userAdSubmissions[idx];
+    const credits = cached.pendingTokenCreditsByUserId ?? {};
+    credits[s.userId] = (credits[s.userId] ?? 0) + s.tokensPaid;
+    cached.pendingTokenCreditsByUserId = credits;
+    cached.userAdSubmissions[idx] = { ...s, status: 'rejected', reviewedAt: Date.now() };
+    saveToStorage(cached);
+    addUserAdSystemNotification(
+      s.userId,
+      'user_ad_rejected',
+      'Your Explore ad was not approved. The tokens you paid have been returned to your balance.'
+    );
+    return true;
+  },
+
+  /** Apply refunded tokens for this user (e.g. after a rejected ad). Returns amount credited. */
+  consumePendingTokenCredits(userId: string): number {
+    const credits = cached.pendingTokenCreditsByUserId ?? {};
+    const amt = credits[userId] ?? 0;
+    if (amt <= 0) return 0;
+    const next = { ...credits };
+    delete next[userId];
+    cached.pendingTokenCreditsByUserId = next;
+    saveToStorage(cached);
+    return amt;
+  },
+
+  /** Disable expired user ads and notify owners. */
+  processExpiredUserAds(): boolean {
+    const ads = cached.exploreCarousel?.ads ?? [];
+    let changed = false;
+    const now = Date.now();
+    const nextAds = ads.map((ad) => {
+      if (ad.source !== 'user' || !ad.enabled || !ad.campaignEndsAt || ad.campaignEndsAt > now) {
+        return ad;
+      }
+      changed = true;
+      const uid = ad.submittedByUserId;
+      if (uid) {
+        addUserAdSystemNotification(
+          uid,
+          'user_ad_expired',
+          'Your Explore ad campaign has ended and is no longer shown in the carousel.'
+        );
+      }
+      return normalizeExploreCarouselAd({ ...ad, enabled: false, id: ad.id });
+    });
+    if (changed) {
+      cached.exploreCarousel = { ads: nextAds.map((a) => normalizeExploreCarouselAd(a)) };
+      saveToStorage(cached);
+    }
+    return changed;
   },
 
   resetToDefaults() {

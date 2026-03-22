@@ -20,7 +20,10 @@ const getBadgeRank = (user: User): number => {
 /** First Explore grid cell — rotating carousel of live ads from Ad centre. */
 const ExploreCarouselTile: React.FC = () => {
   const { ads } = getExploreCarousel();
-  const liveAds = ads.filter((a) => a.enabled);
+  const now = Date.now();
+  const liveAds = ads.filter(
+    (a) => a.enabled && (!a.campaignEndsAt || a.campaignEndsAt > now)
+  );
   const [idx, setIdx] = useState(0);
 
   const liveSig = liveAds.map((a) => `${a.id}:${a.displayDurationSec}`).join('|');
@@ -207,21 +210,44 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
   const areAnyFiltersActive = (profileType === 'human' && areHumanFiltersActive) || (profileType === 'ai' && areAIFiltersActive);
   return (
     <div className="flex flex-col min-h-full bg-white">
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <h1 className="text-2xl font-black text-black tracking-tight">Explore Your World</h1>
-        <button 
+      {/* pr reserves space for the global notification bell (top-right) so the filter control stays tappable */}
+      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4 pr-[4.25rem]">
+        <h1 className="min-w-0 flex-1 text-2xl font-black tracking-tight text-black">Explore Your World</h1>
+        <button
+          type="button"
           onClick={() => setShowFilters(!showFilters)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-            showFilters || areAnyFiltersActive
-            ? 'bg-white text-pink-600' 
-            : 'bg-white text-zinc-700'
+          aria-expanded={showFilters}
+          aria-label="Open filters"
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all ${
+            showFilters || areAnyFiltersActive ? 'bg-white text-pink-600' : 'bg-white text-zinc-700'
           }`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <line x1="4" y1="21" x2="4" y2="14" />
+            <line x1="4" y1="10" x2="4" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12" y2="3" />
+            <line x1="20" y1="21" x2="20" y2="16" />
+            <line x1="20" y1="12" x2="20" y2="3" />
+            <line x1="1" y1="14" x2="7" y2="14" />
+            <line x1="9" y1="8" x2="15" y2="8" />
+            <line x1="17" y1="16" x2="23" y2="16" />
+          </svg>
         </button>
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3">
+      <div className="mt-4 flex items-center gap-2 overflow-x-auto px-4 pb-3">
         <button
           type="button"
           onClick={() => setActiveTextFilter('all')}

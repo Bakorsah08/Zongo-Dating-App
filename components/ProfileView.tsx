@@ -1,16 +1,7 @@
 
-import React, { useRef, useState } from 'react';
-import { User, BadgeTier, PayoutDetails, AppNotification } from '../types';
+import React, { useRef, useState, useEffect } from 'react';
+import { User, BadgeTier, PayoutDetails, UserAdSubmission } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
-
-function formatRelativeTime(ts: number): string {
-  const sec = Math.floor((Date.now() - ts) / 1000);
-  if (sec < 45) return 'Just now';
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
-  return new Date(ts).toLocaleDateString();
-}
 
 interface ProfileViewProps {
   user: User;
@@ -20,11 +11,23 @@ interface ProfileViewProps {
   onUpdateProfile: (updates: Partial<User>) => void;
   onPurchaseBadge?: (tier: BadgeTier) => boolean;
   onLogout?: () => void;
-  /** Super Like (and future) notifications for this profile owner. */
-  superLikeNotifications?: AppNotification[];
+  onSubmitUserAd?: (payload: {
+    tierId: string;
+    durationDays: number;
+    title: string;
+    subtitle: string;
+    badgeLabel: string;
+    imageUrl: string;
+    imageDataUrl: string;
+    backgroundColor: string;
+    linkUrl: string;
+    displayDurationSec: number;
+  }) => { success: boolean; error?: string };
+  userAdSubmissions?: UserAdSubmission[];
 }
 
 const MAX_PHOTOS = 8;
+const USER_AD_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 const ProfileView: React.FC<ProfileViewProps> = ({ 
   user, 
@@ -34,7 +37,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onUpdateProfile,
   onPurchaseBadge,
   onLogout,
-  superLikeNotifications = [],
+  onSubmitUserAd,
+  userAdSubmissions = [],
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +50,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const [editingBasic, setEditingBasic] = useState(false);
   const [basicDraft, setBasicDraft] = useState({ name: user.name, age: user.age, location: user.location });
   const [showBadgeShop, setShowBadgeShop] = useState(false);
+  const [promoteExploreOpen, setPromoteExploreOpen] = useState(false);
+  const [payoutDropdownOpen, setPayoutDropdownOpen] = useState(false);
 
   const handleUploadClick = () => {
     if (user.album.length >= MAX_PHOTOS) return;
@@ -142,13 +148,91 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const purchasableBadges = getBadges().filter(b => b.id !== 'none');
   const monetization = getMonetizationSettings();
   const vipBadgesEnabled = monetization.vipBadgesEnabled;
+  const adTiers = [...(monetization.userAdDurationTiers ?? [])].sort((a, b) => a.durationDays - b.durationDays);
   const isLimitReached = user.album.length >= MAX_PHOTOS;
   const [showPayoutForm, setShowPayoutForm] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
 
+  const [selectedAdTierId, setSelectedAdTierId] = useState(() => adTiers[0]?.id ?? '');
+  const tierIdsKey = adTiers.map((t) => t.id).join('|');
+  useEffect(() => {
+    const tiers = [...(getMonetizationSettings().userAdDurationTiers ?? [])].sort(
+      (a, b) => a.durationDays - b.durationDays
+    );
+    if (tiers.length && !tiers.some((t) => t.id === selectedAdTierId)) {
+      setSelectedAdTierId(tiers[0].id);
+    }
+  }, [tierIdsKey, selectedAdTierId]);
+  const selectedAdTier = adTiers.find((t) => t.id === selectedAdTierId);
+  const [adTitle, setAdTitle] = useState('');
+  const [adSubtitle, setAdSubtitle] = useState('');
+  const [adBadge, setAdBadge] = useState('Promo');
+  const [adLink, setAdLink] = useState('');
+  const [adBgColor, setAdBgColor] = useState('#ec4899');
+  const [adImageUrl, setAdImageUrl] = useState('');
+  const [adImageDataUrl, setAdImageDataUrl] = useState('');
+  const [adSlideSec, setAdSlideSec] = useState(8);
+  const [adSubmitMsg, setAdSubmitMsg] = useState<string | null>(null);
+  const userAdFileRef = useRef<HTMLInputElement>(null);
+
+  const resetUserAdForm = () => {
+    setAdTitle('');
+    setAdSubtitle('');
+    setAdBadge('Promo');
+    setAdLink('');
+    setAdBgColor('#ec4899');
+    setAdImageUrl('');
+    setAdImageDataUrl('');
+    setAdSlideSec(8);
+  };
+
+  const handleUserAdImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    if (file.size > USER_AD_MAX_UPLOAD_BYTES) {
+      alert('Image must be under 2 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') setAdImageDataUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitUserAd = () => {
+    if (!onSubmitUserAd) return;
+    if (!selectedAdTier) {
+      setAdSubmitMsg('Select a campaign length.');
+      return;
+    }
+    setAdSubmitMsg(null);
+    const r = onSubmitUserAd({
+      tierId: selectedAdTierId,
+      durationDays: selectedAdTier.durationDays,
+      title: adTitle,
+      subtitle: adSubtitle,
+      badgeLabel: adBadge,
+      imageUrl: adImageUrl,
+      imageDataUrl: adImageDataUrl,
+      backgroundColor: adBgColor,
+      linkUrl: adLink,
+      displayDurationSec: adSlideSec,
+    });
+    if (r.success) {
+      setAdSubmitMsg('Submitted for review. You will be notified when it is approved or rejected.');
+      resetUserAdForm();
+    } else {
+      setAdSubmitMsg(r.error ?? 'Could not submit.');
+    }
+  };
+
+  const pendingExploreAds = userAdSubmissions.filter((s) => s.status === 'pending').length;
+
   return (
-    <div className="min-h-full bg-white p-6 pb-28 text-zinc-900">
-      <div className="mb-8 flex flex-col items-center gap-4">
+    <div className="min-h-full bg-[#f3f3f3] p-6 pb-28 text-zinc-900">
+      <div className="mb-[0.8rem] flex flex-col items-center gap-4">
         <div className="relative">
           <img src={user.avatar} className="h-32 w-32 rounded-full border-4 border-zinc-200 object-cover shadow-lg" />
           <button 
@@ -204,46 +288,245 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       </div>
 
-      {superLikeNotifications.length > 0 ? (
-        <div className="mb-8 rounded-3xl border border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 p-5 shadow-sm">
-          <h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-pink-900">Notifications</h4>
-          <ul className="space-y-2">
-            {superLikeNotifications.map((n) => (
-              <li
-                key={n.id}
-                className={`flex items-center gap-3 rounded-2xl border border-pink-100/80 bg-white px-3 py-3 ${
-                  n.read ? 'opacity-75' : 'shadow-sm'
-                }`}
+      <section className="mb-[0.8rem]">
+        <div className="mb-3 flex items-center justify-between px-1">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">About Me</h4>
+          {!editingBio ? (
+            <button
+              onClick={() => setEditingBio(true)}
+              className="text-xs font-bold text-pink-600 hover:underline"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+        {!editingBio ? (
+          <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">{user.bio}</p>
+        ) : (
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <textarea
+              value={bioDraft}
+              onChange={(e) => setBioDraft(e.target.value)}
+              placeholder="Tell others about yourself..."
+              rows={4}
+              className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-pink-500"
+            />
+            <div className="mt-3 flex gap-2">
+              <button onClick={saveBio} className="flex-1 rounded-lg bg-pink-600 py-2 text-sm font-bold text-white">
+                Save
+              </button>
+              <button onClick={cancelBio} className="flex-1 rounded-lg border border-zinc-200 bg-white py-2 text-sm font-bold text-zinc-700">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {onSubmitUserAd && adTiers.length > 0 ? (
+        <div className="relative z-20 mx-auto mb-[0.8rem] w-full max-w-md">
+          <button
+            type="button"
+            onClick={() => setPromoteExploreOpen((open) => !open)}
+            aria-expanded={promoteExploreOpen}
+            aria-controls="profile-promote-explore-panel"
+            id="profile-promote-explore-trigger"
+            className="flex w-full items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-zinc-50"
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-200/80 text-lg"
+                aria-hidden
               >
-                <img
-                  src={n.fromAvatar || 'https://picsum.photos/seed/sl/80'}
-                  alt=""
-                  className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-pink-100"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-zinc-900">
-                    <span className="mr-1" aria-hidden>
-                      ⭐
-                    </span>
-                    {n.type === 'super_like' ? (
-                      <>
-                        <span className="text-pink-700">{n.fromName}</span> sent you a Super Like
-                      </>
-                    ) : (
-                      n.fromName
-                    )}
-                  </p>
-                  <p className="text-[11px] text-zinc-500">{formatRelativeTime(n.createdAt)}</p>
+                📣
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-black uppercase tracking-wider text-violet-900">
+                  Promote on Explore
+                </span>
+                <span className="block text-xs text-zinc-600">
+                  {promoteExploreOpen
+                    ? 'Tap to hide the form'
+                    : 'Tap to create an Explore carousel ad'}
+                </span>
+              </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              {pendingExploreAds > 0 ? (
+                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-black text-white">
+                  {pendingExploreAds} pending
+                </span>
+              ) : null}
+              {userAdSubmissions.length > 0 && pendingExploreAds === 0 ? (
+                <span className="rounded-full bg-violet-200 px-2 py-0.5 text-[10px] font-bold text-violet-900">
+                  {userAdSubmissions.length} saved
+                </span>
+              ) : null}
+              <span
+                className={`text-zinc-500 transition-transform duration-200 ${promoteExploreOpen ? 'rotate-180' : ''}`}
+                aria-hidden
+              >
+                ▼
+              </span>
+            </span>
+          </button>
+
+          {promoteExploreOpen ? (
+            <div
+              id="profile-promote-explore-panel"
+              role="region"
+              aria-labelledby="profile-promote-explore-trigger"
+              className="mt-2 rounded-3xl bg-white p-5 shadow-sm"
+            >
+              <p className="text-xs text-zinc-600 mb-4">
+                Create a carousel-style ad for the first tile on Explore. You pay tokens now; if your ad is rejected,
+                tokens are returned. If approved, an admin sets it live — your chosen duration runs from when it goes
+                live.
+              </p>
+              <div className="space-y-3 rounded-2xl bg-zinc-50/80 p-4">
+                <div>
+                  <label htmlFor="profile-ad-tier" className="block text-[10px] font-bold uppercase text-zinc-500 mb-2">
+                    Campaign length
+                  </label>
+                  <select
+                    id="profile-ad-tier"
+                    value={selectedAdTierId}
+                    onChange={(e) => setSelectedAdTierId(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-violet-500"
+                  >
+                    {adTiers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.durationDays} day{t.durationDays === 1 ? '' : 's'} · {t.tokenCost} tokens
+                      </option>
+                    ))}
+                  </select>
+                  {selectedAdTier ? (
+                    <p className="text-[11px] text-zinc-500 mt-2">
+                      This submission will cost {selectedAdTier.tokenCost} tokens.
+                    </p>
+                  ) : null}
                 </div>
-              </li>
-            ))}
-          </ul>
+                <input
+                  value={adTitle}
+                  onChange={(e) => setAdTitle(e.target.value)}
+                  placeholder="Title"
+                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                />
+                <input
+                  value={adSubtitle}
+                  onChange={(e) => setAdSubtitle(e.target.value)}
+                  placeholder="Subtitle"
+                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                />
+                <input
+                  value={adBadge}
+                  onChange={(e) => setAdBadge(e.target.value)}
+                  placeholder="Badge label (e.g. Promo)"
+                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-xs text-zinc-500">Background</label>
+                  <input
+                    type="color"
+                    aria-label="Ad background colour"
+                    value={/^#[0-9A-Fa-f]{6}$/.test(adBgColor) ? adBgColor : '#ec4899'}
+                    onChange={(e) => setAdBgColor(e.target.value)}
+                    className="h-9 w-14 cursor-pointer rounded border border-zinc-200"
+                  />
+                  <input
+                    value={adBgColor}
+                    onChange={(e) => setAdBgColor(e.target.value)}
+                    className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                  />
+                </div>
+                <input
+                  type="url"
+                  value={adImageUrl}
+                  onChange={(e) => setAdImageUrl(e.target.value)}
+                  placeholder="Image URL (optional if you upload)"
+                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                />
+                <input ref={userAdFileRef} type="file" accept="image/*" className="hidden" onChange={handleUserAdImage} />
+                <button
+                  type="button"
+                  onClick={() => userAdFileRef.current?.click()}
+                  className="rounded-xl border border-violet-300 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-900"
+                >
+                  Upload image (max 2 MB)
+                </button>
+                {adImageDataUrl ? (
+                  <div className="flex items-center gap-2">
+                    <img src={adImageDataUrl} alt="" className="h-16 w-14 rounded-lg object-cover border" />
+                    <button type="button" className="text-xs text-red-600 font-bold" onClick={() => setAdImageDataUrl('')}>
+                      Remove upload
+                    </button>
+                  </div>
+                ) : null}
+                <input
+                  type="url"
+                  value={adLink}
+                  onChange={(e) => setAdLink(e.target.value)}
+                  placeholder="Link when someone taps the ad (optional)"
+                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                />
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-zinc-500">Seconds on screen per rotation</label>
+                  <input
+                    type="number"
+                    min={3}
+                    max={120}
+                    value={adSlideSec}
+                    onChange={(e) => setAdSlideSec(Math.min(120, Math.max(3, parseInt(e.target.value, 10) || 8)))}
+                    className="mt-1 w-24 rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                  />
+                </div>
+                {adSubmitMsg ? <p className="text-xs font-medium text-violet-800">{adSubmitMsg}</p> : null}
+                <button
+                  type="button"
+                  onClick={submitUserAd}
+                  disabled={!adTitle.trim()}
+                  className="w-full rounded-xl bg-violet-600 py-3 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  Submit for review ({selectedAdTier?.tokenCost ?? '—'} tokens)
+                </button>
+              </div>
+              {userAdSubmissions.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Your submissions</p>
+                  <ul className="space-y-2">
+                    {userAdSubmissions
+                      .slice()
+                      .sort((a, b) => b.createdAt - a.createdAt)
+                      .map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white/80 px-3 py-2 text-xs"
+                        >
+                          <span className="font-bold text-zinc-800 truncate max-w-[60%]">{s.title || 'Untitled'}</span>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 font-bold uppercase text-[10px] ${
+                              s.status === 'pending'
+                                ? 'bg-amber-100 text-amber-900'
+                                : s.status === 'approved'
+                                  ? 'bg-emerald-100 text-emerald-900'
+                                  : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {s.status}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {/* VIP Badge Section */}
       {vipBadgesEnabled && (
-        <div className="mb-8 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-pink-50 p-5">
+        <div className="mb-[0.8rem] rounded-3xl bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className="text-3xl">{currentBadge?.icon || '⭐'}</span>
@@ -253,9 +536,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                 <p className="text-[10px] text-zinc-600">Earn or purchase to rank higher on Explore</p>
               </div>
             </div>
-            <button 
+            <button
+              type="button"
               onClick={() => setShowBadgeShop(true)}
-              className="shrink-0 rounded-full border border-amber-300 bg-amber-100 px-4 py-2 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-200"
+              className="shrink-0 rounded-full bg-amber-100 px-4 py-2 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-200"
             >
               Get Badge
             </button>
@@ -263,14 +547,15 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       )}
 
-      <div className="mb-8 flex items-center justify-between rounded-3xl border border-zinc-200 bg-zinc-50 p-6 shadow-sm">
+      <div className="mb-[0.8rem] flex items-center justify-between rounded-3xl bg-white p-6 shadow-sm">
         <div>
           <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-500">Balance</p>
           <h3 className="flex items-center gap-2 text-3xl font-black text-zinc-900">
             <span>💎</span> {tokens}
           </h3>
         </div>
-        <button 
+        <button
+          type="button"
           onClick={onGoShop}
           className="rounded-full bg-pink-600 px-6 py-2.5 text-sm font-bold text-white shadow-md transition-all active:scale-95 hover:bg-pink-500"
         >
@@ -278,70 +563,127 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         </button>
       </div>
 
-      {/* Payout - Earnings & Withdraw */}
-      <div className="mb-8 rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-6">
-          <h4 className="mb-4 text-xs font-bold uppercase tracking-widest text-emerald-800">Payout</h4>
-          <div className="mb-4 grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-[10px] uppercase text-zinc-500">Earnings</p>
-              <p className="font-bold text-zinc-900">${earnings.toLocaleString()}</p>
+      {/* Payout - Earnings & Withdraw (collapsible) */}
+      <div className="relative z-20 mx-auto mb-[0.8rem] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setPayoutDropdownOpen((open) => !open)}
+          aria-expanded={payoutDropdownOpen}
+          aria-controls="profile-payout-panel"
+          id="profile-payout-trigger"
+          className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-zinc-50/80"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-200/80 text-lg"
+              aria-hidden
+            >
+              🏦
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-black uppercase tracking-wider text-zinc-900">Payout</span>
+              <span className="block text-xs text-zinc-600">
+                {payoutDropdownOpen
+                  ? 'Tap to hide'
+                  : user.payoutDetails
+                    ? `Outstanding $${outstanding.toLocaleString()} · Earnings $${earnings.toLocaleString()}`
+                    : 'Add bank or mobile money to withdraw earnings'}
+              </span>
+            </span>
+          </span>
+          <span
+            className={`shrink-0 text-zinc-500 transition-transform duration-200 ${payoutDropdownOpen ? 'rotate-180' : ''}`}
+            aria-hidden
+          >
+            ▼
+          </span>
+        </button>
+
+        {payoutDropdownOpen ? (
+          <div
+            id="profile-payout-panel"
+            role="region"
+            aria-labelledby="profile-payout-trigger"
+            className="px-4 pb-4 pt-1"
+          >
+            <h4 className="sr-only">Payout details</h4>
+            <div className="mb-4 grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-[10px] uppercase text-zinc-500">Earnings</p>
+                <p className="font-bold text-zinc-900">${earnings.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-zinc-500">Transferred</p>
+                <p className="font-bold text-zinc-600">${transferredOut.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-zinc-500">Outstanding</p>
+                <p className="font-bold text-zinc-900">${outstanding.toLocaleString()}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] uppercase text-zinc-500">Transferred</p>
-              <p className="font-bold text-zinc-600">${transferredOut.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-zinc-500">Outstanding</p>
-              <p className="font-bold text-emerald-700">${outstanding.toLocaleString()}</p>
-            </div>
-          </div>
-          {!user.payoutDetails ? (
-            <button onClick={() => setShowPayoutForm(true)} className="w-full rounded-xl border border-emerald-300 bg-emerald-600 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-500">
-              Add Bank or Mobile Money
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-xs text-zinc-600">
-                {user.payoutDetails.type === 'bank'
-                  ? `${user.payoutDetails.bankName} •••• ${user.payoutDetails.accountNumber?.slice(-4)}`
-                  : `${user.payoutDetails.provider} ${user.payoutDetails.mobileNumber}`}
-              </p>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Amount"
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-900"
-                />
+            {!user.payoutDetails ? (
+              <button
+                type="button"
+                onClick={() => setShowPayoutForm(true)}
+                className="w-full rounded-xl border border-emerald-300 bg-emerald-600 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-500"
+              >
+                Add Bank or Mobile Money
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-zinc-600">
+                  {user.payoutDetails.type === 'bank'
+                    ? `${user.payoutDetails.bankName} •••• ${user.payoutDetails.accountNumber?.slice(-4)}`
+                    : `${user.payoutDetails.provider} ${user.payoutDetails.mobileNumber}`}
+                </p>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Amount"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const amt = parseFloat(withdrawAmount);
+                      if (amt > 0 && amt <= outstanding) {
+                        onUpdateProfile({ transferredOut: transferredOut + amt });
+                        setWithdrawAmount('');
+                      }
+                    }}
+                    className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-500"
+                  >
+                    Withdraw
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const amt = parseFloat(withdrawAmount);
-                    if (amt > 0 && amt <= outstanding) {
-                      onUpdateProfile({ transferredOut: transferredOut + amt });
-                      setWithdrawAmount('');
-                    }
-                  }}
-                  className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-500"
+                  onClick={() => setShowPayoutForm(true)}
+                  className="text-xs text-pink-600 hover:underline"
                 >
-                  Withdraw
+                  Change payout details
                 </button>
               </div>
-              <button onClick={() => setShowPayoutForm(true)} className="text-xs text-pink-600 hover:underline">Change payout details</button>
-            </div>
-          )}
-          {showPayoutForm && (
-            <PayoutFormModal
-              details={user.payoutDetails}
-              onSave={(d) => { onUpdateProfile({ payoutDetails: d }); setShowPayoutForm(false); }}
-              onClose={() => setShowPayoutForm(false)}
-            />
-          )}
+            )}
+          </div>
+        ) : null}
       </div>
 
-      <div className="space-y-8">
+      {showPayoutForm ? (
+        <PayoutFormModal
+          details={user.payoutDetails}
+          onSave={(d) => {
+            onUpdateProfile({ payoutDetails: d });
+            setShowPayoutForm(false);
+          }}
+          onClose={() => setShowPayoutForm(false)}
+        />
+      ) : null}
+
+      <div className="space-y-[0.8rem]">
         <section>
           <div className="mb-4 flex items-center justify-between px-1">
             <div className="flex flex-col">
@@ -389,39 +731,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
             )}
           </div>
-        </section>
-
-        <section>
-          <div className="mb-3 flex items-center justify-between px-1">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">About Me</h4>
-            {!editingBio ? (
-              <button 
-                onClick={() => setEditingBio(true)}
-                className="text-xs font-bold text-pink-600 hover:underline"
-              >
-                Edit
-              </button>
-            ) : null}
-          </div>
-          {!editingBio ? (
-            <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-              {user.bio}
-            </p>
-          ) : (
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <textarea
-                value={bioDraft}
-                onChange={e => setBioDraft(e.target.value)}
-                placeholder="Tell others about yourself..."
-                rows={4}
-                className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-pink-500"
-              />
-              <div className="mt-3 flex gap-2">
-                <button onClick={saveBio} className="flex-1 rounded-lg bg-pink-600 py-2 text-sm font-bold text-white">Save</button>
-                <button onClick={cancelBio} className="flex-1 rounded-lg border border-zinc-200 bg-white py-2 text-sm font-bold text-zinc-700">Cancel</button>
-              </div>
-            </div>
-          )}
         </section>
 
         <section>

@@ -234,12 +234,19 @@ export const TOKEN_COSTS = {
   LIVE_STREAM: 10,
 };
 
+export const DEFAULT_USER_AD_DURATION_TIERS: MonetizationSettings['userAdDurationTiers'] = [
+  { id: 'uadt-default-3d', durationDays: 3, tokenCost: 50 },
+  { id: 'uadt-default-7d', durationDays: 7, tokenCost: 100 },
+  { id: 'uadt-default-14d', durationDays: 14, tokenCost: 180 },
+];
+
 export const DEFAULT_MONETIZATION_SETTINGS: MonetizationSettings = {
   starterTokens: 250,
   liveStreamEntryTokens: 10,
   videoCallTokens: 50,
   videoCallPerIntervalTokens: 10,
   superLikeTokens: 5,
+  userAdDurationTiers: [...DEFAULT_USER_AD_DURATION_TIERS],
   liveStreamingEnabled: true,
   giftingEnabled: true,
   videoCallEnabled: true,

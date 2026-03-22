@@ -18,7 +18,7 @@ const AdminsPage: React.FC = () => {
   if (!canManage) {
     return (
       <div className="p-8">
-        <h2 className="text-xl font-bold text-white">Access Denied</h2>
+        <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Access Denied</h2>
         <p className="text-zinc-500 mt-2">You don&apos;t have permission to manage admins.</p>
       </div>
     );
@@ -46,7 +46,7 @@ const AdminsPage: React.FC = () => {
     <div className="p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-white">Admin Users</h1>
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Admin Users</h1>
           <p className="text-zinc-500 mt-1">Manage who can access the admin dashboard</p>
         </div>
         <button
@@ -57,10 +57,10 @@ const AdminsPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-zinc-800">
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
               <th className="text-left p-4 text-zinc-500 font-medium text-sm">Name</th>
               <th className="text-left p-4 text-zinc-500 font-medium text-sm">Email</th>
               <th className="text-left p-4 text-zinc-500 font-medium text-sm">Role</th>
@@ -69,14 +69,14 @@ const AdminsPage: React.FC = () => {
           </thead>
           <tbody>
             {admins.map((admin) => (
-              <tr key={admin.id} className="border-b border-zinc-800/50">
+              <tr key={admin.id} className="border-b border-zinc-200 dark:border-zinc-800/50">
                 <td className="p-4 font-medium">{admin.name}</td>
-                <td className="p-4 text-zinc-400">{admin.email}</td>
+                <td className="p-4 text-zinc-600 dark:text-zinc-400">{admin.email}</td>
                 <td className="p-4">
                   <select
                     value={admin.role}
                     onChange={(e) => handleUpdateRole(admin.id, e.target.value as Role)}
-                    className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-white"
+                    className="bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-900 dark:text-white"
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
@@ -129,10 +129,10 @@ const AddAdminModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full">
-        <div className="p-6 border-b border-zinc-800 flex justify-between">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md w-full">
+        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between">
           <h2 className="text-xl font-bold">Add Admin</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">✕</button>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">✕</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -140,7 +140,7 @@ const AddAdminModal: React.FC<{
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -149,7 +149,7 @@ const AddAdminModal: React.FC<{
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -158,7 +158,7 @@ const AddAdminModal: React.FC<{
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -166,15 +166,15 @@ const AddAdminModal: React.FC<{
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             >
               <option value="admin">Admin</option>
               <option value="moderator">Moderator</option>
             </select>
           </div>
         </div>
-        <div className="p-6 border-t border-zinc-800 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Cancel</button>
+        <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white">Cancel</button>
           <button onClick={handleSubmit} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl">
             Add
           </button>

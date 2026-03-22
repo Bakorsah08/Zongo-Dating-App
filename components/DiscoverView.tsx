@@ -1,12 +1,22 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { getUsers, getBadges, getMonetizationSettings, getExploreCarousel } from '../data';
 import type { User, UserGender } from '../types';
+import {
+  getDiscoveryPreferences,
+  setDiscoveryPreferences,
+  getPrivacyPreferences,
+  USER_PREFERENCES_UPDATED_EVENT,
+  type DiscoveryTextFilter,
+} from '../userPreferencesStore';
 
 interface DiscoverViewProps {
   userGender?: UserGender;
   onSelectUser: (user: User) => void;
   onSelectLive: (user: User) => void;
   onGoLive?: () => void;
+  /** Increment (e.g. from Profile → Discovery preferences) to open the filter sheet. */
+  exploreFilterOpenSignal?: number;
+  blockedUserIds?: string[];
 }
 
 const AI_PERSONALITIES = ['Any', 'Romantic', 'Playful', 'Calm', 'Intellectual'];
@@ -127,32 +137,105 @@ const ExploreCarouselTile: React.FC = () => {
   );
 };
 
-const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, onSelectLive, onGoLive }) => {
+function distanceLine(
+  user: User,
+  approximateOnly: boolean
+): string {
+  if (user.isAI) return 'AI Companion';
+  if (user.isLive) return 'Tap to watch live';
+  if (!approximateOnly) return `${user.distance} miles away`;
+  if (user.distance <= 5) return 'Very close';
+  if (user.distance <= 25) return 'Nearby';
+  return 'Farther away';
+}
+
+const DiscoverView: React.FC<DiscoverViewProps> = ({
+  userGender,
+  onSelectUser,
+  onSelectLive,
+  onGoLive,
+  exploreFilterOpenSignal = 0,
+  blockedUserIds = [],
+}) => {
   const liveStreamingEnabled = getMonetizationSettings().liveStreamingEnabled;
+  const initial = getDiscoveryPreferences();
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTextFilter, setActiveTextFilter] = useState<
-    'all' | 'recommend' | 'newcomer' | 'nearby' | 'live'
-  >('all');
-  
-  // Filter states
-  const [profileType, setProfileType] = useState<'human' | 'ai'>('human');
-  
-  // Human filters
-  const [filterOnline, setFilterOnline] = useState<'all' | 'online'>('all');
-  const [maxDistance, setMaxDistance] = useState(50);
-  const [minAge, setMinAge] = useState(18);
-  const [maxAge, setMaxAge] = useState(50);
-  
-  // AI filters
-  const [aiMinAge, setAiMinAge] = useState(18);
-  const [aiMaxAge, setAiMaxAge] = useState(35);
-  const [aiPersonality, setAiPersonality] = useState('Any');
-  const [aiStyle, setAiStyle] = useState('Any');
+  const [activeTextFilter, setActiveTextFilter] = useState<DiscoveryTextFilter>(initial.activeTextFilter);
+
+  const [profileType, setProfileType] = useState<'human' | 'ai'>(initial.profileType);
+
+  const [filterOnline, setFilterOnline] = useState<'all' | 'online'>(initial.filterOnline);
+  const [maxDistance, setMaxDistance] = useState(initial.maxDistance);
+  const [minAge, setMinAge] = useState(initial.minAge);
+  const [maxAge, setMaxAge] = useState(initial.maxAge);
+
+  const [aiMinAge, setAiMinAge] = useState(initial.aiMinAge);
+  const [aiMaxAge, setAiMaxAge] = useState(initial.aiMaxAge);
+  const [aiPersonality, setAiPersonality] = useState(initial.aiPersonality);
+  const [aiStyle, setAiStyle] = useState(initial.aiStyle);
+
+  const [approximateDistance, setApproximateDistance] = useState(
+    () => getPrivacyPreferences().showApproximateDistanceOnly
+  );
+
+  const lastFilterSignal = useRef(exploreFilterOpenSignal);
+  useEffect(() => {
+    if (exploreFilterOpenSignal !== lastFilterSignal.current) {
+      lastFilterSignal.current = exploreFilterOpenSignal;
+      setShowFilters(true);
+    }
+  }, [exploreFilterOpenSignal]);
+
+  useEffect(() => {
+    setDiscoveryPreferences({
+      activeTextFilter,
+      profileType,
+      filterOnline,
+      maxDistance,
+      minAge,
+      maxAge,
+      aiMinAge,
+      aiMaxAge,
+      aiPersonality,
+      aiStyle,
+    });
+  }, [
+    activeTextFilter,
+    profileType,
+    filterOnline,
+    maxDistance,
+    minAge,
+    maxAge,
+    aiMinAge,
+    aiMaxAge,
+    aiPersonality,
+    aiStyle,
+  ]);
+
+  const syncApproximateFromStore = () => {
+    setApproximateDistance(getPrivacyPreferences().showApproximateDistanceOnly);
+  };
+
+  useEffect(() => {
+    const onPrefs = () => syncApproximateFromStore();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'zongo_user_preferences_v1') onPrefs();
+    };
+    window.addEventListener(USER_PREFERENCES_UPDATED_EVENT, onPrefs);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(USER_PREFERENCES_UPDATED_EVENT, onPrefs);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  const blockedSet = useMemo(() => new Set(blockedUserIds), [blockedUserIds]);
 
   const filteredUsers = useMemo(() => {
     const allUsers = getUsers();
     let filtered = allUsers
-      .filter(user => user.id !== 'me') // Exclude current user
+      .filter((user) => user.id !== 'me')
+      .filter((user) => !blockedSet.has(user.id))
       .filter(user => {
         const matchesOnline = filterOnline === 'all' || user.isOnline;
         const matchesDistance = user.distance <= maxDistance;
@@ -203,7 +286,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
       if (rankB !== rankA) return rankB - rankA;
       return a.distance - b.distance;
     });
-  }, [userGender, filterOnline, maxDistance, minAge, maxAge, activeTextFilter]);
+  }, [userGender, filterOnline, maxDistance, minAge, maxAge, activeTextFilter, blockedSet]);
 
   const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
   const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
@@ -432,7 +515,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ userGender, onSelectUser, o
                   {user.isOnline && !user.isLive && !user.isAI && <span className="w-3 h-3 bg-green-500 rounded-full"></span>}
                 </div>
                 <p className="text-[10px] text-zinc-300 truncate drop-shadow-md">
-                  {user.isAI ? "AI Companion" : (user.isLive ? 'Tap to watch live' : `${user.distance} miles away`)}
+                  {distanceLine(user, approximateDistance)}
                 </p>
               </div>
             </div>

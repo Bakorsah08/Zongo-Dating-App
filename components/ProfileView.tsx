@@ -2,6 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { User, BadgeTier, PayoutDetails, UserAdSubmission } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
+import ProfileSettingsSheets, { type ProfileSettingsSheetId } from './ProfileSettingsSheets';
 
 interface ProfileViewProps {
   user: User;
@@ -11,6 +12,10 @@ interface ProfileViewProps {
   onUpdateProfile: (updates: Partial<User>) => void;
   onPurchaseBadge?: (tier: BadgeTier) => boolean;
   onLogout?: () => void;
+  /** Opens Explore with the filter sheet (Discovery preferences). */
+  onNavigateToExploreFilters?: () => void;
+  /** Called after notification or privacy prefs change so the app can refresh derived UI. */
+  onPreferencesChanged?: () => void;
   onSubmitUserAd?: (payload: {
     tierId: string;
     durationDays: number;
@@ -40,6 +45,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onUpdateProfile,
   onPurchaseBadge,
   onLogout,
+  onNavigateToExploreFilters,
+  onPreferencesChanged,
   onSubmitUserAd,
   userAdSubmissions = [],
 }) => {
@@ -55,6 +62,14 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const [showBadgeShop, setShowBadgeShop] = useState(false);
   const [promoteExploreOpen, setPromoteExploreOpen] = useState(false);
   const [payoutDropdownOpen, setPayoutDropdownOpen] = useState(false);
+  const [settingsSheet, setSettingsSheet] = useState<ProfileSettingsSheetId | null>(null);
+
+  const SETTINGS_ROWS: { id: ProfileSettingsSheetId; label: string }[] = [
+    { id: 'notifications', label: 'Notification Settings' },
+    { id: 'discovery', label: 'Discovery Preferences' },
+    { id: 'privacy', label: 'Privacy & Safety' },
+    { id: 'help', label: 'Help & Support' },
+  ];
 
   const handleUploadClick = () => {
     if (user.album.length >= MAX_PHOTOS) return;
@@ -792,9 +807,14 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         <section>
           <h4 className="mb-3 px-1 text-xs font-bold uppercase tracking-widest text-zinc-500">Settings</h4>
           <div className="divide-y divide-zinc-100 rounded-2xl border border-zinc-200 bg-white">
-            {['Notification Settings', 'Discovery Preferences', 'Privacy & Safety', 'Help & Support'].map((item) => (
-              <button key={item} className="group flex w-full items-center justify-between px-4 py-4 text-left text-sm font-medium">
-                <span className="text-zinc-800">{item}</span>
+            {SETTINGS_ROWS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSettingsSheet(id)}
+                className="group flex w-full items-center justify-between px-4 py-4 text-left text-sm font-medium [-webkit-tap-highlight-color:transparent]"
+              >
+                <span className="text-zinc-800">{label}</span>
                 <span className="text-zinc-400 transition-transform group-hover:translate-x-1">→</span>
               </button>
             ))}
@@ -1008,6 +1028,15 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
       )}
+
+      {settingsSheet ? (
+        <ProfileSettingsSheets
+          sheet={settingsSheet}
+          onClose={() => setSettingsSheet(null)}
+          onNavigateToExploreFilters={() => onNavigateToExploreFilters?.()}
+          onPreferencesChanged={() => onPreferencesChanged?.()}
+        />
+      ) : null}
     </div>
   );
 };

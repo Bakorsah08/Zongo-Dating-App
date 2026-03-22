@@ -63,7 +63,6 @@ const Navbar: React.FC<NavbarProps> = ({
   setView,
   liveStreamingEnabled = true,
   hidden = false,
-  profileUnreadDot = false,
 }) => {
   const inactive = 'text-white/55 hover:text-white/90';
   const active = 'text-pink-400';
@@ -98,7 +97,7 @@ const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={() => setView(View.HOST_LIVE)}
-              className="relative -top-7 flex h-[3.75rem] w-[3.75rem] shrink-0 items-center justify-center rounded-full bg-pink-500 text-white shadow-[0_4px_20px_rgba(236,72,153,0.45)] ring-[5px] ring-white transition-transform active:scale-95"
+              className="relative -top-7 flex h-[3.75rem] w-[3.75rem] shrink-0 items-center justify-center rounded-full bg-pink-500 text-white shadow-[0_0_0_2px_rgba(24,24,27,0.18),0_4px_20px_rgba(236,72,153,0.45)] ring-[5px] ring-white transition-transform active:scale-95"
               aria-label="Start live stream"
             >
               <WebcamIcon className="h-7 w-7" />

@@ -20,11 +20,15 @@ import CashOutView from './components/CashOutView';
 import {
   addSuperLikeNotification,
   getNotificationsForUser,
-  getUnreadNotificationCount,
   markAllNotificationsRead,
   SUPER_LIKE_NOTIFICATION_EVENT,
   APP_NOTIFICATION_UPDATED_EVENT,
 } from './notificationsStore';
+import {
+  addBlockedUserId,
+  getNotificationPreferences,
+  getPrivacyPreferences,
+} from './userPreferencesStore';
 
 const DEFAULT_ME: User = {
   id: 'me',
@@ -84,6 +88,9 @@ const App: React.FC = () => {
   const [userAdSubmissionsTick, setUserAdSubmissionsTick] = useState(0);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [superLikeToast, setSuperLikeToast] = useState<string | null>(null);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>(() => getPrivacyPreferences().blockedUserIds);
+  const [exploreFilterSignal, setExploreFilterSignal] = useState(0);
+  const [prefsTick, setPrefsTick] = useState(0);
   const currentUserRef = useRef(state.currentUser);
   currentUserRef.current = state.currentUser;
 
@@ -113,9 +120,11 @@ const App: React.FC = () => {
     const onSuperLikeEvent = (ev: Event) => {
       const recipientId = (ev as CustomEvent<{ recipientId: string }>).detail?.recipientId;
       if (recipientId && recipientId === currentUserRef.current.id) {
-        setSuperLikeToast('You received a Super Like!');
+        if (getNotificationPreferences().superLikeEnabled) {
+          setSuperLikeToast('You received a Super Like!');
+          window.setTimeout(() => setSuperLikeToast(null), 4500);
+        }
         setNotifTick((t) => t + 1);
-        window.setTimeout(() => setSuperLikeToast(null), 4500);
       }
     };
     const onAppNotif = (ev: Event) => {
@@ -151,10 +160,20 @@ const App: React.FC = () => {
     profileViewPrev.current = state.currentView;
   }, [state.currentView, state.currentUser.id]);
 
+  const profileInAppNotifications = useMemo(() => {
+    if (!state.currentUser) return [];
+    const raw = getNotificationsForUser(state.currentUser.id);
+    const { superLikeEnabled, systemEnabled } = getNotificationPreferences();
+    return raw.filter((n) => {
+      if (n.type === 'super_like' && !superLikeEnabled) return false;
+      if (n.type === 'system' && !systemEnabled) return false;
+      return true;
+    });
+  }, [state.currentUser?.id, notifTick, prefsTick]);
+
   const notifUnreadCount = useMemo(
-    () =>
-      state.currentUser ? getUnreadNotificationCount(state.currentUser.id) : 0,
-    [state.currentUser?.id, notifTick]
+    () => profileInAppNotifications.filter((n) => !n.read).length,
+    [profileInAppNotifications]
   );
 
   const currentUserId = state.currentUser?.id;
@@ -174,17 +193,12 @@ const App: React.FC = () => {
       v === View.LIVE_STREAM ||
       v === View.HOST_LIVE ||
       v === View.CHAT_ROOM ||
-      v === View.VIDEO_CALL
+      v === View.VIDEO_CALL ||
+      v === View.USER_DETAIL
     ) {
       setNotifPanelOpen(false);
     }
   }, [state.currentView]);
-  const profileInAppNotifications = useMemo(
-    () =>
-      state.currentUser ? getNotificationsForUser(state.currentUser.id) : [],
-    [state.currentUser?.id, notifTick]
-  );
-
   const userAdSubmissions = useMemo(
     () =>
       state.currentUser
@@ -407,6 +421,8 @@ const App: React.FC = () => {
   const isChatRoom = state.currentView === View.CHAT_ROOM;
   const isVideoCall = state.currentView === View.VIDEO_CALL;
   const fullBleedMain = isLiveView || isChatRoom || isVideoCall;
+  const showNotificationBell =
+    !fullBleedMain && state.currentView !== View.USER_DETAIL;
 
   const renderView = () => {
     switch (state.currentView) {
@@ -417,10 +433,15 @@ const App: React.FC = () => {
             onSelectUser={openUserDetail}
             onSelectLive={openLive}
             onGoLive={() => setView(View.HOST_LIVE)}
+            exploreFilterOpenSignal={exploreFilterSignal}
+            blockedUserIds={blockedUserIds}
           />
         );
       case View.FOLLOWING: {
-        const followingUsers = getUsers().filter(u => state.followingIds.includes(u.id));
+        const blocked = new Set(blockedUserIds);
+        const followingUsers = getUsers().filter(
+          (u) => state.followingIds.includes(u.id) && !blocked.has(u.id)
+        );
         const badges = getBadges();
         return (
           <div className="min-h-full bg-white pb-24">
@@ -601,6 +622,14 @@ const App: React.FC = () => {
             onUpdateProfile={handleUpdateProfile}
             onPurchaseBadge={handlePurchaseBadge}
             onLogout={() => { clearAppSession(); setAppSessionState(null); }}
+            onNavigateToExploreFilters={() => {
+              setExploreFilterSignal((n) => n + 1);
+              setView(View.EXPLORE);
+            }}
+            onPreferencesChanged={() => {
+              setBlockedUserIds([...getPrivacyPreferences().blockedUserIds]);
+              setPrefsTick((t) => t + 1);
+            }}
             onSubmitUserAd={handleSubmitUserAd}
             userAdSubmissions={userAdSubmissions}
           />
@@ -628,13 +657,18 @@ const App: React.FC = () => {
               window.alert("Thanks — we'll review your report.");
             }}
             onBlock={() => {
+              const id = state.selectedUserForDetail?.id;
+              if (id) {
+                addBlockedUserId(id);
+                setBlockedUserIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+              }
               setState((prev) => {
-                const id = prev.selectedUserForDetail?.id;
-                if (!id) return prev;
+                const bid = prev.selectedUserForDetail?.id;
+                if (!bid) return prev;
                 return {
                   ...prev,
-                  matches: prev.matches.filter((m) => m.id !== id),
-                  followingIds: prev.followingIds.filter((x) => x !== id),
+                  matches: prev.matches.filter((m) => m.id !== bid),
+                  followingIds: prev.followingIds.filter((x) => x !== bid),
                   currentView: prev.profileReturnView ?? View.EXPLORE,
                   selectedUserForDetail: undefined,
                 };
@@ -654,6 +688,8 @@ const App: React.FC = () => {
             onSelectUser={openUserDetail}
             onSelectLive={openLive}
             onGoLive={() => setView(View.HOST_LIVE)}
+            exploreFilterOpenSignal={exploreFilterSignal}
+            blockedUserIds={blockedUserIds}
           />
         );
     }
@@ -678,7 +714,7 @@ const App: React.FC = () => {
         {renderView()}
       </main>
 
-      {!fullBleedMain ? (
+      {showNotificationBell ? (
         <NotificationBell
           notifications={profileInAppNotifications}
           unreadCount={notifUnreadCount}

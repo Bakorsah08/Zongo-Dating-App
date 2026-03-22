@@ -94,26 +94,26 @@ const NotificationCentrePage: React.FC = () => {
   return (
     <div className="p-8 max-w-3xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-white">Notification centre</h1>
+        <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Notification centre</h1>
         <p className="text-zinc-500 mt-1">
           Send an in-app message to app users. It appears in their notification bell as unread until they open it.
         </p>
       </div>
 
       <div className="space-y-8">
-        <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+        <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6">
           <label className="block text-sm font-bold text-zinc-300 mb-2">Message</label>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
             placeholder="e.g. New live event this Friday at 8pm — don’t miss it!"
-            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600 resize-y min-h-[6rem]"
+            className="w-full px-4 py-3 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600 resize-y min-h-[6rem]"
           />
         </section>
 
-        <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <h2 className="text-lg font-bold text-white">Audience</h2>
+        <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Audience</h2>
 
           <div className="flex flex-wrap gap-3">
             {(
@@ -128,7 +128,7 @@ const NotificationCentrePage: React.FC = () => {
                 className={`flex items-center gap-2 cursor-pointer rounded-xl border px-4 py-2 text-sm font-bold transition-colors ${
                   audience === key
                     ? 'border-rose-500 bg-rose-500/15 text-rose-300'
-                    : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                    : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:border-zinc-600'
                 }`}
               >
                 <input
@@ -144,26 +144,26 @@ const NotificationCentrePage: React.FC = () => {
           </div>
 
           {audience === 'selected' ? (
-            <div className="space-y-3 pt-2 border-t border-zinc-800">
+            <div className="space-y-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
               <div className="flex flex-wrap gap-2 items-center">
                 <input
                   type="search"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   placeholder="Search by name, id, location…"
-                  className="flex-1 min-w-[12rem] px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-sm"
+                  className="flex-1 min-w-[12rem] px-3 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white text-sm"
                 />
                 <button
                   type="button"
                   onClick={selectAllFiltered}
-                  className="px-3 py-2 text-xs font-bold text-rose-400 border border-zinc-600 rounded-xl hover:bg-zinc-800"
+                  className="px-3 py-2 text-xs font-bold text-rose-400 border border-zinc-400 dark:border-zinc-600 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
                   Select all in list
                 </button>
                 <button
                   type="button"
                   onClick={clearSelection}
-                  className="px-3 py-2 text-xs font-bold text-zinc-400 border border-zinc-600 rounded-xl hover:bg-zinc-800"
+                  className="px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 border border-zinc-400 dark:border-zinc-600 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
                   Clear
                 </button>
@@ -171,20 +171,20 @@ const NotificationCentrePage: React.FC = () => {
               <p className="text-xs text-zinc-500">
                 {selectedIds.size} selected · {filteredUsersForSelect.length} shown
               </p>
-              <div className="max-h-56 overflow-y-auto rounded-xl border border-zinc-800 divide-y divide-zinc-800">
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-800">
                 {filteredUsersForSelect.map((u) => (
                   <label
                     key={u.id}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-800/80 cursor-pointer"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-200 dark:bg-zinc-800/80 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedIds.has(u.id)}
                       onChange={() => toggleUser(u.id)}
-                      className="rounded border-zinc-600"
+                      className="rounded border-zinc-400 dark:border-zinc-600"
                     />
                     <img src={u.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
-                    <span className="text-sm text-white font-medium truncate">{u.name}</span>
+                    <span className="text-sm text-zinc-900 dark:text-white font-medium truncate">{u.name}</span>
                     <span className="text-[10px] text-zinc-500 font-mono truncate ml-auto">{u.id}</span>
                   </label>
                 ))}
@@ -193,7 +193,7 @@ const NotificationCentrePage: React.FC = () => {
           ) : null}
 
           {audience === 'group' ? (
-            <div className="space-y-4 pt-2 border-t border-zinc-800">
+            <div className="space-y-4 pt-2 border-t border-zinc-200 dark:border-zinc-800">
               <div className="flex flex-wrap gap-3">
                 {(
                   [
@@ -207,7 +207,7 @@ const NotificationCentrePage: React.FC = () => {
                     className={`flex items-center gap-2 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold ${
                       groupMode === key
                         ? 'border-amber-500/60 bg-amber-500/10 text-amber-200'
-                        : 'border-zinc-700 text-zinc-500'
+                        : 'border-zinc-300 dark:border-zinc-700 text-zinc-500'
                     }`}
                   >
                     <input
@@ -224,12 +224,12 @@ const NotificationCentrePage: React.FC = () => {
 
               {groupMode === 'gender' ? (
                 <div className="flex gap-3">
-                  <label className="text-sm text-zinc-400">
+                  <label className="text-sm text-zinc-600 dark:text-zinc-400">
                     Gender
                     <select
                       value={groupGender}
                       onChange={(e) => setGroupGender(e.target.value as 'male' | 'female')}
-                      className="mt-1 block w-full max-w-xs px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                      className="mt-1 block w-full max-w-xs px-3 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
                     >
                       <option value="female">Female</option>
                       <option value="male">Male</option>
@@ -240,11 +240,11 @@ const NotificationCentrePage: React.FC = () => {
 
               {groupMode === 'badge' ? (
                 <div>
-                  <label className="text-sm text-zinc-400 block mb-1">Badge tier</label>
+                  <label className="text-sm text-zinc-600 dark:text-zinc-400 block mb-1">Badge tier</label>
                   <select
                     value={groupBadge}
                     onChange={(e) => setGroupBadge(e.target.value as BadgeTier)}
-                    className="w-full max-w-xs px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                    className="w-full max-w-xs px-3 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
                   >
                     {badges.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -263,8 +263,8 @@ const NotificationCentrePage: React.FC = () => {
         </section>
 
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="text-sm text-zinc-400">
-            <span className="font-bold text-white tabular-nums">{previewCount}</span> recipient
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-bold text-zinc-900 dark:text-white tabular-nums">{previewCount}</span> recipient
             {previewCount === 1 ? '' : 's'} for this send
           </p>
           <button

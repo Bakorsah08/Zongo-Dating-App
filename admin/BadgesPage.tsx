@@ -22,7 +22,7 @@ const BadgesPage: React.FC = () => {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-white">Badges</h1>
+        <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Badges</h1>
         <p className="text-zinc-500 mt-1">Manage VIP badge tiers and pricing</p>
       </div>
 
@@ -30,7 +30,7 @@ const BadgesPage: React.FC = () => {
         {badges.filter((b) => b.id !== 'none').map((badge) => (
           <div
             key={badge.id}
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex items-center justify-between"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex items-center justify-between"
           >
             <div className="flex items-center gap-4">
               <span className="text-4xl">{badge.icon || '🏅'}</span>
@@ -53,10 +53,10 @@ const BadgesPage: React.FC = () => {
 
       {editing && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md w-full">
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
               <h2 className="text-xl font-bold">Edit Badge: {editing.name}</h2>
-              <button onClick={() => setEditing(null)} className="text-zinc-500 hover:text-white">✕</button>
+              <button onClick={() => setEditing(null)} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">✕</button>
             </div>
             <BadgeEditForm badge={editing} onSave={handleSave} onClose={() => setEditing(null)} />
           </div>
@@ -87,7 +87,7 @@ const BadgeEditForm: React.FC<{
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
         <div>
@@ -95,7 +95,7 @@ const BadgeEditForm: React.FC<{
           <input
             value={form.icon}
             onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
         <div>
@@ -104,7 +104,7 @@ const BadgeEditForm: React.FC<{
             type="number"
             value={form.tokenCost}
             onChange={(e) => setForm((f) => ({ ...f, tokenCost: parseInt(e.target.value) || 0 }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
         <div>
@@ -113,7 +113,7 @@ const BadgeEditForm: React.FC<{
             type="number"
             value={form.minEarningsToEarn}
             onChange={(e) => setForm((f) => ({ ...f, minEarningsToEarn: parseInt(e.target.value) || 0 }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
         <div>
@@ -122,12 +122,12 @@ const BadgeEditForm: React.FC<{
             type="number"
             value={form.rank}
             onChange={(e) => setForm((f) => ({ ...f, rank: parseInt(e.target.value) || 0 }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
       </div>
-      <div className="p-6 border-t border-zinc-800 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Cancel</button>
+      <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+        <button onClick={onClose} className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white">Cancel</button>
         <button onClick={() => onSave(form)} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl">
           Save
         </button>

@@ -51,7 +51,7 @@ const GiftsPage: React.FC = () => {
     <div className="p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-white">Gifts</h1>
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Gifts</h1>
           <p className="text-zinc-500 mt-1">Manage gifts for live streams</p>
         </div>
         <button
@@ -66,7 +66,7 @@ const GiftsPage: React.FC = () => {
         {gifts.map((gift) => (
           <div
             key={gift.id}
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center text-center"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex flex-col items-center text-center"
           >
             <span className="text-5xl mb-3">{gift.icon}</span>
             <p className="font-bold text-lg">{gift.name}</p>
@@ -91,10 +91,10 @@ const GiftsPage: React.FC = () => {
 
       {editing && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md w-full">
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
               <h2 className="text-xl font-bold">Edit Gift</h2>
-              <button onClick={() => setEditing(null)} className="text-zinc-500 hover:text-white">✕</button>
+              <button onClick={() => setEditing(null)} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">✕</button>
             </div>
             <GiftEditForm gift={editing} onSave={handleSave} onClose={() => setEditing(null)} />
           </div>
@@ -123,7 +123,7 @@ const GiftEditForm: React.FC<{
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
         <div>
@@ -131,7 +131,7 @@ const GiftEditForm: React.FC<{
           <select
             value={form.icon}
             onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           >
             {!GIFT_EMOJIS.includes(form.icon) && (
               <option value={form.icon}>{form.icon}</option>
@@ -147,12 +147,12 @@ const GiftEditForm: React.FC<{
             type="number"
             value={form.value}
             onChange={(e) => setForm((f) => ({ ...f, value: parseInt(e.target.value) || 0 }))}
-            className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+            className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
           />
         </div>
       </div>
-      <div className="p-6 border-t border-zinc-800 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Cancel</button>
+      <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+        <button onClick={onClose} className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white">Cancel</button>
         <button onClick={() => onSave(form)} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl">
           Save
         </button>
@@ -177,10 +177,10 @@ const GiftAddModal: React.FC<{ onAdd: (gift: Gift) => void; onClose: () => void 
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full">
-        <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md w-full">
+        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <h2 className="text-xl font-bold">Add Gift</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">✕</button>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">✕</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -189,7 +189,7 @@ const GiftAddModal: React.FC<{ onAdd: (gift: Gift) => void; onClose: () => void 
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Rose"
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -197,7 +197,7 @@ const GiftAddModal: React.FC<{ onAdd: (gift: Gift) => void; onClose: () => void 
             <select
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             >
               {GIFT_EMOJIS.map((emoji) => (
                 <option key={emoji} value={emoji}>{emoji}</option>
@@ -210,12 +210,12 @@ const GiftAddModal: React.FC<{ onAdd: (gift: Gift) => void; onClose: () => void 
               type="number"
               value={value}
               onChange={(e) => setValue(parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
         </div>
-        <div className="p-6 border-t border-zinc-800 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Cancel</button>
+        <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white">Cancel</button>
           <button onClick={handleSubmit} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl">
             Add
           </button>

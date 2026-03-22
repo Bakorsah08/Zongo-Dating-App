@@ -150,13 +150,13 @@ const AdsCentrePage: React.FC = () => {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-white">Ad centre</h1>
+        <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Ad centre</h1>
         <p className="text-zinc-500 mt-1 max-w-2xl">
-          <strong className="text-zinc-400">Pending user ads</strong> appear in the sidebar first — select one to approve
-          or reject. Approved slides join <strong className="text-zinc-400">Carousel slides</strong>; tick{' '}
-          <strong className="text-zinc-400">Live on Explore</strong> to show them in the app. The app and admin must use
-          the <strong className="text-zinc-400">same site and browser</strong> (e.g. both{' '}
-          <code className="text-zinc-400">http://localhost:5173</code>) so they share storage.
+          <strong className="text-zinc-600 dark:text-zinc-400">Pending user ads</strong> appear in the sidebar first — select one to approve
+          or reject. Approved slides join <strong className="text-zinc-600 dark:text-zinc-400">Carousel slides</strong>; tick{' '}
+          <strong className="text-zinc-600 dark:text-zinc-400">Live on Explore</strong> to show them in the app. The app and admin must use
+          the <strong className="text-zinc-600 dark:text-zinc-400">same site and browser</strong> (e.g. both{' '}
+          <code className="text-zinc-600 dark:text-zinc-400">http://localhost:5173</code>) so they share storage.
         </p>
         <button
           type="button"
@@ -170,7 +170,7 @@ const AdsCentrePage: React.FC = () => {
       <div className="flex flex-col gap-10 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 max-w-xl space-y-6">
           {selectedPending ? (
-            <section className="bg-zinc-900 border border-amber-500/40 rounded-2xl p-6 space-y-4">
+            <section className="bg-white dark:bg-zinc-900 border border-amber-500/40 rounded-2xl p-6 space-y-4">
               <div>
                 <h2 className="text-lg font-bold text-amber-200">Review user submission</h2>
                 <p className="text-zinc-500 text-sm mt-1">
@@ -178,7 +178,7 @@ const AdsCentrePage: React.FC = () => {
                   tokens.
                 </p>
               </div>
-              <div className="rounded-xl overflow-hidden border border-zinc-700 aspect-[3/4] max-h-64 w-44 bg-zinc-800">
+              <div className="rounded-xl overflow-hidden border border-zinc-300 dark:border-zinc-700 aspect-[3/4] max-h-64 w-44 bg-zinc-200 dark:bg-zinc-800">
                 {submissionThumbSrc(selectedPending) ? (
                   <img src={submissionThumbSrc(selectedPending)!} alt="" className="h-full w-full object-cover" />
                 ) : selectedPending.backgroundColor.trim() ? (
@@ -190,7 +190,7 @@ const AdsCentrePage: React.FC = () => {
               <dl className="text-sm space-y-2 text-zinc-300">
                 <div>
                   <dt className="text-zinc-500 text-xs uppercase">Title</dt>
-                  <dd className="font-bold text-white">{selectedPending.title || '—'}</dd>
+                  <dd className="font-bold text-zinc-900 dark:text-white">{selectedPending.title || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-zinc-500 text-xs uppercase">Subtitle</dt>
@@ -241,16 +241,16 @@ const AdsCentrePage: React.FC = () => {
             </section>
           ) : selected ? (
             <>
-              <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+              <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={selected.enabled}
                     onChange={(e) => patchSelected({ enabled: e.target.checked })}
-                    className="w-5 h-5 rounded border-zinc-600 bg-zinc-800 text-rose-500 focus:ring-rose-500"
+                    className="w-5 h-5 rounded border-zinc-400 dark:border-zinc-600 bg-zinc-200 dark:bg-zinc-800 text-rose-500 focus:ring-rose-500"
                   />
                   <div>
-                    <span className="text-white font-bold">Live on Explore</span>
+                    <span className="text-zinc-900 dark:text-white font-bold">Live on Explore</span>
                     <p className="text-zinc-500 text-sm">
                       Only ads with this checked appear in the rotating carousel in the app.
                       {selected.source === 'user' ? (
@@ -264,10 +264,10 @@ const AdsCentrePage: React.FC = () => {
                 </label>
               </section>
 
-              <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
+              <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-bold text-white">Edit ad</h2>
+                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Edit ad</h2>
                     {selected.source === 'user' ? (
                       <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400 mt-1">
                         User submission
@@ -294,7 +294,7 @@ const AdsCentrePage: React.FC = () => {
                         displayDurationSec: Math.min(120, Math.max(3, parseInt(e.target.value, 10) || 8)),
                       })
                     }
-                    className="w-full max-w-[12rem] px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                    className="w-full max-w-[12rem] px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
                   />
                   <p className="text-zinc-600 text-xs mt-1">How long this slide stays visible before the next (3–120).</p>
                 </div>
@@ -305,7 +305,7 @@ const AdsCentrePage: React.FC = () => {
                     value={selected.badgeLabel}
                     onChange={(e) => patchSelected({ badgeLabel: e.target.value })}
                     placeholder="Promo"
-                    className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600"
+                    className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600"
                   />
                 </div>
                 <div>
@@ -315,7 +315,7 @@ const AdsCentrePage: React.FC = () => {
                     value={selected.title}
                     onChange={(e) => patchSelected({ title: e.target.value })}
                     placeholder="Featured on Zongo"
-                    className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600"
+                    className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600"
                   />
                 </div>
                 <div>
@@ -325,11 +325,11 @@ const AdsCentrePage: React.FC = () => {
                     value={selected.subtitle}
                     onChange={(e) => patchSelected({ subtitle: e.target.value })}
                     placeholder="Tap to see this week's highlight"
-                    className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600"
+                    className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600"
                   />
                 </div>
 
-                <div className="pt-2 border-t border-zinc-800">
+                <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
                   <h3 className="text-sm font-bold text-zinc-300 mb-3">Background</h3>
                   <div className="space-y-3">
                     <div>
@@ -340,19 +340,19 @@ const AdsCentrePage: React.FC = () => {
                           aria-label="Pick background colour"
                           value={colorPickerValue}
                           onChange={(e) => patchSelected({ backgroundColor: e.target.value })}
-                          className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-600 bg-zinc-800"
+                          className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-400 dark:border-zinc-600 bg-zinc-200 dark:bg-zinc-800"
                         />
                         <input
                           type="text"
                           value={selected.backgroundColor}
                           onChange={(e) => patchSelected({ backgroundColor: e.target.value })}
                           placeholder="#ec4899 or rgb(236,72,153)"
-                          className="min-w-[12rem] flex-1 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600"
+                          className="min-w-[12rem] flex-1 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600"
                         />
                         <button
                           type="button"
                           onClick={() => patchSelected({ backgroundColor: '' })}
-                          className="px-3 py-2 text-xs font-bold text-zinc-400 hover:text-white rounded-xl border border-zinc-600 hover:border-zinc-500"
+                          className="px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-xl border border-zinc-400 dark:border-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-500"
                         >
                           Clear colour
                         </button>
@@ -380,7 +380,7 @@ const AdsCentrePage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => patchSelected({ imageDataUrl: '' })}
-                            className="px-3 py-2 text-xs font-bold text-zinc-400 hover:text-white rounded-xl border border-zinc-600"
+                            className="px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-xl border border-zinc-400 dark:border-zinc-600"
                           >
                             Remove upload
                           </button>
@@ -391,7 +391,7 @@ const AdsCentrePage: React.FC = () => {
                           <img
                             src={selected.imageDataUrl}
                             alt=""
-                            className="h-24 w-20 object-cover rounded-lg border border-zinc-600"
+                            className="h-24 w-20 object-cover rounded-lg border border-zinc-400 dark:border-zinc-600"
                           />
                           <p className="text-zinc-500 text-xs pt-1">Upload overrides image URL.</p>
                         </div>
@@ -406,7 +406,7 @@ const AdsCentrePage: React.FC = () => {
                         value={selected.imageUrl}
                         onChange={(e) => patchSelected({ imageUrl: e.target.value })}
                         placeholder="https://…"
-                        className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600"
+                        className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600"
                       />
                     </div>
                   </div>
@@ -418,14 +418,14 @@ const AdsCentrePage: React.FC = () => {
                     value={selected.linkUrl}
                     onChange={(e) => patchSelected({ linkUrl: e.target.value })}
                     placeholder="https://…"
-                    className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder:text-zinc-600"
+                    className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600"
                   />
                   <p className="text-zinc-600 text-xs mt-1">Opens in a new tab when someone taps the tile.</p>
                 </div>
               </section>
             </>
           ) : (
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 text-center text-zinc-500">
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-8 text-center text-zinc-500">
               Select a pending submission or carousel slide on the right, or add a new platform ad.
             </div>
           )}
@@ -486,7 +486,7 @@ const AdsCentrePage: React.FC = () => {
                       type="button"
                       onClick={() => setSelectedKey(ad.id)}
                       className={`relative aspect-[3/4] rounded-xl border-2 overflow-hidden text-left transition-all ${
-                        isSel ? 'border-rose-500 ring-2 ring-rose-500/30' : 'border-zinc-700 hover:border-zinc-500'
+                        isSel ? 'border-rose-500 ring-2 ring-rose-500/30' : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500'
                       }`}
                     >
                       {thumb ? (
@@ -528,7 +528,7 @@ const AdsCentrePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={addAd}
-                  className="aspect-[3/4] rounded-xl border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center gap-1 text-zinc-500 hover:border-rose-500/50 hover:text-rose-400 transition-colors"
+                  className="aspect-[3/4] rounded-xl border-2 border-dashed border-zinc-400 dark:border-zinc-600 flex flex-col items-center justify-center gap-1 text-zinc-500 hover:border-rose-500/50 hover:text-rose-400 transition-colors"
                 >
                   <span className="text-2xl font-light">+</span>
                   <span className="text-[10px] font-bold uppercase">Add</span>

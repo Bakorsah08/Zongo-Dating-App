@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
-import { backButtonClassName, BackChevron } from '../components/BackButton';
+import { backButtonClassName, backButtonLightClassName, BackChevron } from '../components/BackButton';
+import { AdminThemeToggle, useAdminTheme } from '../admin/AdminThemeContext';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +12,7 @@ const LoginPage: React.FC = () => {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useAdminTheme();
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/admin';
 
@@ -32,16 +34,23 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-black bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
-            Zongo Admin
-          </h1>
-          <p className="text-zinc-500 text-sm mt-1">Sign in to manage your dating app</p>
+        <div className="mb-8 space-y-4">
+          <div className="flex justify-center">
+            <div className="w-full max-w-[200px]">
+              <AdminThemeToggle />
+            </div>
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-black bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent">
+              Zongo Admin
+            </h1>
+            <p className="text-zinc-500 text-sm mt-1">Sign in to manage your dating app</p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4">
           {error && (
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
               {error}
@@ -56,7 +65,7 @@ const LoginPage: React.FC = () => {
               placeholder="admin@zongo.com"
               required
               autoComplete="email"
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500"
+              className="w-full px-4 py-3 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-rose-500"
             />
           </div>
           <div>
@@ -68,7 +77,7 @@ const LoginPage: React.FC = () => {
               placeholder="••••••••"
               required
               autoComplete="current-password"
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500"
+              className="w-full px-4 py-3 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-rose-500"
             />
           </div>
           <button
@@ -84,8 +93,12 @@ const LoginPage: React.FC = () => {
           Default: admin@zongo.com / admin123
         </p>
         <div className="flex justify-center mt-6">
-          <Link to="/" aria-label="Back to app" className={backButtonClassName}>
-            <BackChevron />
+          <Link
+            to="/"
+            aria-label="Back to app"
+            className={theme === 'light' ? backButtonLightClassName : backButtonClassName}
+          >
+            <BackChevron className={theme === 'light' ? 'text-zinc-900' : undefined} />
           </Link>
         </div>
       </div>

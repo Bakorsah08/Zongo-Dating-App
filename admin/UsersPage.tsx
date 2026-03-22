@@ -65,7 +65,7 @@ const UsersPage: React.FC = () => {
     <div className="p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-white">Users</h1>
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Users</h1>
           <p className="text-zinc-500 mt-1">Manage all user accounts</p>
         </div>
         <button
@@ -83,12 +83,12 @@ const UsersPage: React.FC = () => {
           placeholder="Search users..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500 w-64"
+          className="px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-rose-500 w-64"
         />
         <select
           value={filterBadge}
           onChange={(e) => setFilterBadge(e.target.value)}
-          className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-rose-500"
+          className="px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-white focus:outline-none focus:border-rose-500"
         >
           <option value="all">All Badges</option>
           {BADGE_OPTIONS.map((b) => (
@@ -98,7 +98,7 @@ const UsersPage: React.FC = () => {
         <select
           value={filterOnline}
           onChange={(e) => setFilterOnline(e.target.value)}
-          className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-rose-500"
+          className="px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-white focus:outline-none focus:border-rose-500"
         >
           <option value="all">All Status</option>
           <option value="online">Online</option>
@@ -107,11 +107,11 @@ const UsersPage: React.FC = () => {
       </div>
 
       {/* Users table */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-zinc-200 dark:border-zinc-800">
                 <th className="text-left p-4 text-zinc-500 font-medium text-sm">User</th>
                 <th className="text-left p-4 text-zinc-500 font-medium text-sm">Badge</th>
                 <th className="text-left p-4 text-zinc-500 font-medium text-sm">Status</th>
@@ -123,7 +123,7 @@ const UsersPage: React.FC = () => {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                <tr key={u.id} className="border-b border-zinc-200 dark:border-zinc-800/50 hover:bg-zinc-200 dark:bg-zinc-800/30">
                   <td className="p-4">
                     <div className="flex items-center gap-4">
                       <img src={u.avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
@@ -134,7 +134,7 @@ const UsersPage: React.FC = () => {
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className="px-2 py-1 rounded-lg bg-zinc-800 text-sm">{u.badgeTier || 'none'}</span>
+                    <span className="px-2 py-1 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-sm">{u.badgeTier || 'none'}</span>
                   </td>
                   <td className="p-4">
                     <span className={`inline-flex items-center gap-1.5 text-sm ${u.isOnline ? 'text-emerald-400' : 'text-zinc-500'}`}>
@@ -143,9 +143,9 @@ const UsersPage: React.FC = () => {
                       {u.isLive && <span className="text-rose-400">• Live</span>}
                     </span>
                   </td>
-                  <td className="p-4 text-zinc-400">${(u.earnings ?? 0).toLocaleString()}</td>
-                  <td className="p-4 text-zinc-400">${(u.transferredOut ?? 0).toLocaleString()}</td>
-                  <td className="p-4 font-medium text-emerald-400">${Math.max(0, (u.earnings ?? 0) - (u.transferredOut ?? 0)).toLocaleString()}</td>
+                  <td className="p-4 text-zinc-600 dark:text-zinc-400">${(u.earnings ?? 0).toLocaleString()}</td>
+                  <td className="p-4 text-zinc-600 dark:text-zinc-400">${(u.transferredOut ?? 0).toLocaleString()}</td>
+                  <td className="p-4 font-medium text-zinc-900 dark:text-emerald-400">${Math.max(0, (u.earnings ?? 0) - (u.transferredOut ?? 0)).toLocaleString()}</td>
                   <td className="p-4 text-right">
                     <button
                       onClick={() => setSearchParams({ edit: u.id })}
@@ -210,10 +210,10 @@ const UserEditModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <h2 className="text-xl font-bold">Edit User</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">✕</button>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">✕</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -221,7 +221,7 @@ const UserEditModal: React.FC<{
             <input
               value={form.name ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -231,7 +231,7 @@ const UserEditModal: React.FC<{
                 type="number"
                 value={form.age ?? 0}
                 onChange={(e) => setForm((f) => ({ ...f, age: parseInt(e.target.value) || 0 }))}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
               />
             </div>
             <div>
@@ -240,7 +240,7 @@ const UserEditModal: React.FC<{
                 type="number"
                 value={form.distance ?? 0}
                 onChange={(e) => setForm((f) => ({ ...f, distance: parseInt(e.target.value) || 0 }))}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
               />
             </div>
           </div>
@@ -250,7 +250,7 @@ const UserEditModal: React.FC<{
               value={form.bio ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
               rows={3}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -258,7 +258,7 @@ const UserEditModal: React.FC<{
             <input
               value={form.location ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -266,7 +266,7 @@ const UserEditModal: React.FC<{
             <input
               value={Array.isArray(form.interests) ? form.interests.join(', ') : ''}
               onChange={(e) => setForm((f) => ({ ...f, interests: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -274,7 +274,7 @@ const UserEditModal: React.FC<{
             <select
               value={form.badgeTier ?? 'none'}
               onChange={(e) => setForm((f) => ({ ...f, badgeTier: e.target.value as BadgeTier }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             >
               <option value="none">None</option>
               {BADGE_OPTIONS.map((b) => (
@@ -288,7 +288,7 @@ const UserEditModal: React.FC<{
               type="number"
               value={form.earnings ?? 0}
               onChange={(e) => setForm((f) => ({ ...f, earnings: parseInt(e.target.value) || 0 }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -297,7 +297,7 @@ const UserEditModal: React.FC<{
               type="number"
               value={form.transferredOut ?? 0}
               onChange={(e) => setForm((f) => ({ ...f, transferredOut: parseInt(e.target.value) || 0 }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div className="flex gap-4">
@@ -321,12 +321,12 @@ const UserEditModal: React.FC<{
             </label>
           </div>
         </div>
-        <div className="p-6 border-t border-zinc-800 flex justify-between">
+        <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-between">
           <button onClick={onDelete} className="text-red-500 hover:text-red-400 font-medium">
             Delete User
           </button>
           <div className="flex gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white">Cancel</button>
             <button onClick={() => onSave(form)} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl">
               Save
             </button>
@@ -379,10 +379,10 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <h2 className="text-xl font-bold">Add User</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">✕</button>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">✕</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -390,7 +390,7 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
             <input
               value={form.name ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -400,7 +400,7 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
                 type="number"
                 value={form.age ?? 25}
                 onChange={(e) => setForm((f) => ({ ...f, age: parseInt(e.target.value) || 25 }))}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
               />
             </div>
             <div>
@@ -408,7 +408,7 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
               <select
                 value={form.badgeTier ?? 'none'}
                 onChange={(e) => setForm((f) => ({ ...f, badgeTier: e.target.value as BadgeTier }))}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+                className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
               >
                 <option value="none">None</option>
                 {BADGE_OPTIONS.map((b) => (
@@ -423,7 +423,7 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
               value={form.bio ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
               rows={2}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -431,7 +431,7 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
             <input
               value={form.avatar ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, avatar: e.target.value }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
           <div>
@@ -439,12 +439,12 @@ const UserAddModal: React.FC<{ onAdd: (user: User) => void; onClose: () => void 
             <input
               value={form.location ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-              className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white"
+              className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             />
           </div>
         </div>
-        <div className="p-6 border-t border-zinc-800 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Cancel</button>
+        <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white">Cancel</button>
           <button onClick={handleSubmit} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl">
             Add User
           </button>

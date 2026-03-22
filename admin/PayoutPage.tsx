@@ -48,35 +48,35 @@ const PayoutPage: React.FC = () => {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-white">Platform Payout</h1>
+        <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Platform Payout</h1>
         <p className="text-zinc-500 mt-1">Add bank or mobile money details to withdraw your revenue</p>
       </div>
 
       {/* Balance summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6">
           <p className="text-zinc-500 text-xs uppercase font-bold mb-1">Total Revenue</p>
-          <p className="text-2xl font-black text-white">${totalAvailable.toFixed(2)}</p>
+          <p className="text-2xl font-black text-zinc-900 dark:text-white">${totalAvailable.toFixed(2)}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6">
           <p className="text-zinc-500 text-xs uppercase font-bold mb-1">Transferred Out</p>
-          <p className="text-2xl font-black text-zinc-400">${transferredOut.toFixed(2)}</p>
+          <p className="text-2xl font-black text-zinc-600 dark:text-zinc-400">${transferredOut.toFixed(2)}</p>
         </div>
         <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-2xl p-6">
           <p className="text-zinc-500 text-xs uppercase font-bold mb-1">Outstanding</p>
-          <p className="text-2xl font-black text-emerald-400">${outstanding.toFixed(2)}</p>
+          <p className="text-2xl font-black text-zinc-900 dark:text-emerald-400">${outstanding.toFixed(2)}</p>
         </div>
       </div>
 
       {/* Payout details */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
-        <h2 className="text-lg font-bold text-white mb-4">Bank / Mobile Money Details</h2>
+      <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 mb-8">
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Bank / Mobile Money Details</h2>
         <PayoutDetailsForm details={details} onSave={handleSaveDetails} />
       </section>
 
       {/* Withdraw */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-        <h2 className="text-lg font-bold text-white mb-4">Withdraw to Bank</h2>
+      <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6">
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Withdraw to Bank</h2>
         <p className="text-zinc-500 text-sm mb-4">Transfer your outstanding balance to your bank or mobile money account.</p>
         <div className="flex flex-wrap gap-4 items-end">
           <div>
@@ -88,7 +88,7 @@ const PayoutPage: React.FC = () => {
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder={outstanding.toFixed(2)}
-              className="px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white w-40"
+              className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white w-40"
             />
           </div>
           <button
@@ -147,15 +147,15 @@ const PayoutDetailsForm: React.FC<{ details: PayoutDetails | null; onSave: (d: P
         <>
           <div>
             <label className="block text-zinc-500 text-sm mb-1">Bank name</label>
-            <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white" placeholder="e.g. Chase Bank" />
+            <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white" placeholder="e.g. Chase Bank" />
           </div>
           <div>
             <label className="block text-zinc-500 text-sm mb-1">Account number</label>
-            <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white" placeholder="1234567890" />
+            <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white" placeholder="1234567890" />
           </div>
           <div>
             <label className="block text-zinc-500 text-sm mb-1">Account name</label>
-            <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white" placeholder="John Doe" />
+            <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white" placeholder="John Doe" />
           </div>
         </>
       ) : (
@@ -164,13 +164,13 @@ const PayoutDetailsForm: React.FC<{ details: PayoutDetails | null; onSave: (d: P
             <label className="block text-zinc-500 text-sm mb-1">Provider</label>
             <div className="flex gap-2">
               {['MTN', 'Vodafone', 'AirtelTigo', 'Other'].map((p) => (
-                <button key={p} onClick={() => setProvider(p)} className={`px-3 py-1.5 rounded-lg text-sm ${provider === p ? 'bg-rose-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{p}</button>
+                <button key={p} onClick={() => setProvider(p)} className={`px-3 py-1.5 rounded-lg text-sm ${provider === p ? 'bg-rose-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}>{p}</button>
               ))}
             </div>
           </div>
           <div>
             <label className="block text-zinc-500 text-sm mb-1">Mobile number</label>
-            <input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white" placeholder="e.g. 0244123456" />
+            <input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white" placeholder="e.g. 0244123456" />
           </div>
         </>
       )}

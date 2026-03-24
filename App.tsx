@@ -103,6 +103,7 @@ const App: React.FC = () => {
   const supabaseEnabled = isSupabaseConfigured();
   const prodRequiresSupabase = import.meta.env.PROD;
   const mockAuthEnabled = !supabaseEnabled && !prodRequiresSupabase;
+  const failClosedSupabaseMisconfig = prodRequiresSupabase && !supabaseEnabled;
   const [appSession, setAppSessionState] = useState<ReturnType<typeof getAppSession>>(getAppSession);
   const [sbSession, setSbSession] = useState<Session | null>(null);
   const [sbAuthResolved, setSbAuthResolved] = useState(!supabaseEnabled);
@@ -184,11 +185,13 @@ const App: React.FC = () => {
   }, [supabaseEnabled, sbSession?.user?.id]);
 
   const handleMockEmailAuth = (email: string, _password: string) => {
+    if (!mockAuthEnabled) return;
     setAppSession({ email });
     setAppSessionState(getAppSession());
   };
 
   const handleMockGoogleAuth = () => {
+    if (!mockAuthEnabled) return;
     setAppSession({ email: 'user@gmail.com' });
     setAppSessionState(getAppSession());
   };
@@ -197,7 +200,7 @@ const App: React.FC = () => {
     if (supabaseEnabled && sbSession?.user?.id) {
       await updateProfileGender(sbSession.user.id, gender);
       setServerGender(gender);
-    } else {
+    } else if (mockAuthEnabled) {
       setAppSessionGender(gender);
       setAppSessionState(getAppSession());
     }
@@ -836,6 +839,18 @@ const App: React.FC = () => {
         <div className="text-pink-500 text-4xl animate-bounce">❤</div>
         <p className="mt-4 font-bold tracking-widest uppercase">Signing you in…</p>
         <p className="mt-2 text-sm text-zinc-500">Loading your profile from the server</p>
+      </div>
+    );
+  }
+
+  if (failClosedSupabaseMisconfig) {
+    return (
+      <div className="flex flex-col min-h-screen bg-white text-zinc-900 max-w-md mx-auto items-center justify-center px-6 text-center">
+        <div className="text-pink-500 text-4xl">!</div>
+        <p className="mt-4 font-bold tracking-widest uppercase">Supabase Configuration Required</p>
+        <p className="mt-2 text-sm text-zinc-500">
+          This deployment is running in production mode and requires valid Supabase environment variables.
+        </p>
       </div>
     );
   }

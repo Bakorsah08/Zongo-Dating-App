@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AuthSession, Permission } from './types';
 import { ROLE_PERMISSIONS } from './types';
 import {
@@ -11,31 +11,43 @@ import {
 
 export function useAuth() {
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const initialResolved = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+    const finishInitial = () => {
+      if (!mounted || initialResolved.current) return;
+      initialResolved.current = true;
+      setIsAuthReady(true);
+    };
     const sync = async () => {
-      const sbSession = await getAdminSession();
-      if (!mounted || !sbSession?.user?.id || !sbSession.user.email) {
-        if (mounted) setSession(null);
-        return;
+      try {
+        const sbSession = await getAdminSession();
+        if (!mounted || !sbSession?.user?.id || !sbSession.user.email) {
+          if (mounted) setSession(null);
+          return;
+        }
+        const role = await fetchMyAdminRole();
+        if (!mounted || !role) {
+          if (mounted) setSession(null);
+          return;
+        }
+        if (!mounted) return;
+        setSession({
+          user: {
+            id: sbSession.user.id,
+            email: sbSession.user.email,
+            role,
+            name: sbSession.user.user_metadata?.name || sbSession.user.email.split('@')[0] || 'Admin',
+            createdAt: Date.now(),
+          },
+          token: sbSession.access_token,
+          expiresAt: sbSession.expires_at ? sbSession.expires_at * 1000 : Date.now() + 60 * 60 * 1000,
+        });
+      } finally {
+        finishInitial();
       }
-      const role = await fetchMyAdminRole();
-      if (!mounted || !role) {
-        if (mounted) setSession(null);
-        return;
-      }
-      setSession({
-        user: {
-          id: sbSession.user.id,
-          email: sbSession.user.email,
-          role,
-          name: sbSession.user.user_metadata?.name || sbSession.user.email.split('@')[0] || 'Admin',
-          createdAt: Date.now(),
-        },
-        token: sbSession.access_token,
-        expiresAt: sbSession.expires_at ? sbSession.expires_at * 1000 : Date.now() + 60 * 60 * 1000,
-      });
     };
     void sync();
     const unsub = onAdminAuthStateChange(() => {
@@ -82,5 +94,5 @@ export function useAuth() {
     return permissions?.includes(permission) ?? false;
   }, [session]);
 
-  return { session, isAuthenticated: !!session, login, logout, hasPermission };
+  return { session, isAuthenticated: !!session, isAuthReady, login, logout, hasPermission };
 }

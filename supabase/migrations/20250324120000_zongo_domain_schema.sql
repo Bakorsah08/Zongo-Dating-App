@@ -335,6 +335,7 @@ alter table public.gift_events enable row level security;
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_insert_own" on public.profiles;
 drop policy if exists "profiles_update_own" on public.profiles;
+drop policy if exists "profiles_select_authenticated" on public.profiles;
 create policy "profiles_select_authenticated"
   on public.profiles for select
   to authenticated
@@ -352,6 +353,9 @@ create policy "profiles_update_own"
   with check (auth.uid() = id);
 
 -- user_account
+drop policy if exists "user_account_select_own" on public.user_account;
+drop policy if exists "user_account_update_own" on public.user_account;
+drop policy if exists "user_account_insert_own" on public.user_account;
 create policy "user_account_select_own"
   on public.user_account for select
   to authenticated
@@ -369,6 +373,9 @@ create policy "user_account_insert_own"
   with check (auth.uid() = user_id);
 
 -- follows
+drop policy if exists "follows_select_involved" on public.follows;
+drop policy if exists "follows_insert_self" on public.follows;
+drop policy if exists "follows_delete_self" on public.follows;
 create policy "follows_select_involved"
   on public.follows for select
   to authenticated
@@ -385,6 +392,9 @@ create policy "follows_delete_self"
   using (auth.uid() = follower_id);
 
 -- blocks
+drop policy if exists "blocks_select_self" on public.user_blocks;
+drop policy if exists "blocks_insert_self" on public.user_blocks;
+drop policy if exists "blocks_delete_self" on public.user_blocks;
 create policy "blocks_select_self"
   on public.user_blocks for select
   to authenticated
@@ -401,6 +411,9 @@ create policy "blocks_delete_self"
   using (auth.uid() = blocker_id);
 
 -- match_pairs
+drop policy if exists "match_pairs_select_involved" on public.match_pairs;
+drop policy if exists "match_pairs_insert_involved" on public.match_pairs;
+drop policy if exists "match_pairs_delete_involved" on public.match_pairs;
 create policy "match_pairs_select_involved"
   on public.match_pairs for select
   to authenticated
@@ -417,6 +430,8 @@ create policy "match_pairs_delete_involved"
   using (auth.uid() = user_low or auth.uid() = user_high);
 
 -- conversations
+drop policy if exists "conversations_select_participant" on public.conversations;
+drop policy if exists "conversations_insert_participant" on public.conversations;
 create policy "conversations_select_participant"
   on public.conversations for select
   to authenticated
@@ -428,6 +443,8 @@ create policy "conversations_insert_participant"
   with check (auth.uid() = participant_a or auth.uid() = participant_b);
 
 -- messages
+drop policy if exists "messages_select_participant" on public.messages;
+drop policy if exists "messages_insert_participant" on public.messages;
 create policy "messages_select_participant"
   on public.messages for select
   to authenticated
@@ -452,6 +469,9 @@ create policy "messages_insert_participant"
   );
 
 -- app_notifications
+drop policy if exists "app_notifications_select_recipient" on public.app_notifications;
+drop policy if exists "app_notifications_update_recipient" on public.app_notifications;
+drop policy if exists "app_notifications_insert_super_like" on public.app_notifications;
 create policy "app_notifications_select_recipient"
   on public.app_notifications for select
   to authenticated
@@ -473,6 +493,7 @@ create policy "app_notifications_insert_super_like"
   );
 
 -- user_preferences
+drop policy if exists "user_preferences_all_own" on public.user_preferences;
 create policy "user_preferences_all_own"
   on public.user_preferences for all
   to authenticated
@@ -480,6 +501,8 @@ create policy "user_preferences_all_own"
   with check (auth.uid() = user_id);
 
 -- user_ad_submissions
+drop policy if exists "user_ad_submissions_select_own" on public.user_ad_submissions;
+drop policy if exists "user_ad_submissions_insert_own" on public.user_ad_submissions;
 create policy "user_ad_submissions_select_own"
   on public.user_ad_submissions for select
   to authenticated
@@ -491,6 +514,7 @@ create policy "user_ad_submissions_insert_own"
   with check (auth.uid() = user_id);
 
 -- explore carousel: readable live ads only
+drop policy if exists "explore_carousel_ads_select_live" on public.explore_carousel_ads;
 create policy "explore_carousel_ads_select_live"
   on public.explore_carousel_ads for select
   to authenticated
@@ -504,12 +528,15 @@ create policy "explore_carousel_ads_select_live"
   );
 
 -- platform_settings: read-only for clients (writes via service role / dashboard)
+drop policy if exists "platform_settings_select_authenticated" on public.platform_settings;
 create policy "platform_settings_select_authenticated"
   on public.platform_settings for select
   to authenticated
   using (true);
 
 -- gift_events
+drop policy if exists "gift_events_select_involved" on public.gift_events;
+drop policy if exists "gift_events_insert_sender" on public.gift_events;
 create policy "gift_events_select_involved"
   on public.gift_events for select
   to authenticated

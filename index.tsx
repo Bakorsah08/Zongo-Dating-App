@@ -38,8 +38,15 @@ root.render(
       <AuthProvider>
         <Routes>
           <Route path="/" element={<App />} />
+          <Route
+            path="/admin/login"
+            element={
+              <AdminThemeProvider>
+                <LoginPage />
+              </AdminThemeProvider>
+            }
+          />
           <Route path="admin" element={<AdminShell />}>
-            <Route path="login" element={<LoginPage />} />
             <Route
               element={
                 <ProtectedRoute requiredPermission="view_dashboard">

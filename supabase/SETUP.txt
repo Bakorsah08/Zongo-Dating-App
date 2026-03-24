@@ -16,7 +16,9 @@ Supabase setup (production auth + profiles)
    - 20250325150000_wallet_rpc_rls.sql (wallet RPCs; removes direct client UPDATE on user_account)
    - 20260324170000_admin_wallet_hardening.sql (admin roles, wallet ledger, cashout queue, secure RPCs)
    - 20260324173000_payment_webhook_idempotency.sql (payment webhook idempotency table)
-   Or use Supabase CLI: supabase db push
+   Or use Supabase CLI:
+   - npx supabase login   (first time only)
+   - npm run supabase:migrate
 
    After the domain migration, public.profiles no longer stores email (use Supabase Auth only).
 

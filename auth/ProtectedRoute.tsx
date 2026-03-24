@@ -16,9 +16,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredPermission,
   fallback,
 }) => {
-  const { isAuthenticated, hasPermission } = useAuth();
+  const { isAuthenticated, isAuthReady, hasPermission } = useAuth();
   const location = useLocation();
   const { theme } = useAdminTheme();
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-500 text-sm">Loading…</div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;

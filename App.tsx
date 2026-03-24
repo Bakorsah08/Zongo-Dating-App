@@ -146,9 +146,10 @@ const App: React.FC = () => {
       if (!session) {
         setServerGender(null);
         setSbProfileResolved(true);
-      } else {
-        setSbProfileResolved(false);
       }
+      // Do not set sbProfileResolved(false) here: TOKEN_REFRESHED re-fires this callback
+      // with the same user id, and the profile effect does not re-run — leaving the app
+      // stuck on "Signing you in…" forever. Profile loading toggles that flag instead.
     });
     return () => subscription.unsubscribe();
   }, [supabaseEnabled]);
@@ -164,36 +165,51 @@ const App: React.FC = () => {
     (async () => {
       const uid = sbSession.user.id;
       const email = sbSession.user.email ?? undefined;
-      let merged = await fetchMyProfile(uid, DEFAULT_ME);
-      if (!merged) {
-        await ensureProfileRow(uid, email);
-        merged = await fetchMyProfile(uid, DEFAULT_ME);
-      }
-      if (cancelled) return;
-      if (merged) {
-        setState((prev) => {
-          const nextUser = { ...DEFAULT_ME, ...merged };
-          const inStore = getUsers().some((u) => u.id === nextUser.id);
-          if (!inStore) adminStore.addUser(nextUser);
-          else adminStore.updateUser(nextUser.id, merged);
-          return {
+      try {
+        let merged = await fetchMyProfile(uid, DEFAULT_ME);
+        if (!merged) {
+          await ensureProfileRow(uid, email);
+          merged = await fetchMyProfile(uid, DEFAULT_ME);
+        }
+        if (cancelled) return;
+        if (merged) {
+          setState((prev) => {
+            const nextUser = { ...DEFAULT_ME, ...merged };
+            const inStore = getUsers().some((u) => u.id === nextUser.id);
+            if (!inStore) adminStore.addUser(nextUser);
+            else adminStore.updateUser(nextUser.id, merged);
+            return {
+              ...prev,
+              currentUser: { ...prev.currentUser, ...nextUser },
+            };
+          });
+          setServerGender(merged.gender ?? null);
+        } else {
+          setState((prev) => ({
             ...prev,
-            currentUser: { ...prev.currentUser, ...nextUser },
-          };
-        });
-        setServerGender(merged.gender ?? null);
-      } else {
-        setState((prev) => ({
-          ...prev,
-          currentUser: {
-            ...prev.currentUser,
-            id: uid,
-            name: email?.split('@')[0] || 'Member',
-          },
-        }));
-        setServerGender(null);
+            currentUser: {
+              ...prev.currentUser,
+              id: uid,
+              name: email?.split('@')[0] || 'Member',
+            },
+          }));
+          setServerGender(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setState((prev) => ({
+            ...prev,
+            currentUser: {
+              ...prev.currentUser,
+              id: uid,
+              name: email?.split('@')[0] || 'Member',
+            },
+          }));
+          setServerGender(null);
+        }
+      } finally {
+        if (!cancelled) setSbProfileResolved(true);
       }
-      setSbProfileResolved(true);
     })();
     return () => {
       cancelled = true;

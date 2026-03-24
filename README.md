@@ -19,6 +19,16 @@ View your app in AI Studio: https://ai.studio/apps/drive/1sVlZV6_YCz06Nk1KwKlMeM
 3. Run the app:
    `npm run dev`
 
+## Apply Supabase migrations
+
+1. Make sure `.env.local` contains `VITE_SUPABASE_URL` for your project.
+2. Authenticate Supabase CLI once:
+   `npx supabase login`
+3. Apply migrations:
+   `npm run supabase:migrate`
+
+This command auto-links to your project (using the project ref from `VITE_SUPABASE_URL`) and runs `supabase db push`.
+
 ## Security and Secrets
 
 - `.env.local` is intentionally ignored by git (`*.local` in `.gitignore`).

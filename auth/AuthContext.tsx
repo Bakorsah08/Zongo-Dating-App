@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 interface AuthContextValue {
   session: AuthSession | null;
   isAuthenticated: boolean;
+  isAuthReady: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   hasPermission: (p: Permission) => boolean;

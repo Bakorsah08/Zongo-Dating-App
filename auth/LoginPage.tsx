@@ -9,12 +9,21 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, isAuthReady } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useAdminTheme();
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/admin';
+  const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/admin';
+  const from = rawFrom === '/admin/login' || !rawFrom.startsWith('/admin') ? '/admin' : rawFrom;
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-500 text-sm">Loading…</div>
+      </div>
+    );
+  }
 
   if (isAuthenticated) {
     return <Navigate to={from} replace />;

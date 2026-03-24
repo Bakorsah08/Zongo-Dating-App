@@ -15,9 +15,28 @@ View your app in AI Studio: https://ai.studio/apps/drive/1sVlZV6_YCz06Nk1KwKlMeM
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set the `VITE_GEMINI_API_KEY` in [.env.local](.env.local)
 3. Run the app:
    `npm run dev`
+
+## Security and Secrets
+
+- `.env.local` is intentionally ignored by git (`*.local` in `.gitignore`).
+- Never put `SUPABASE_SERVICE_ROLE_KEY` in frontend env files or any `VITE_*` variable.
+- `VITE_*` values are bundled into the client and should be treated as public.
+- Rotate keys immediately if they are committed or shared accidentally.
+
+### Install local git secret scan hook
+
+After cloning, run:
+
+`npm run setup:hooks`
+
+This installs a `pre-commit` hook that runs:
+
+`npm run check:secrets`
+
+The scan checks staged files for common secret patterns (service-role keys, private keys, hardcoded bearer tokens, and API-key-like literals) and blocks the commit if detected.
 
 ## View on your phone (public tunnel)
 

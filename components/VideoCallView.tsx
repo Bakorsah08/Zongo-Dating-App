@@ -6,6 +6,8 @@ import { getMonetizationSettings } from '../data';
 import { encode, decode, decodeAudioData } from '../services/geminiService';
 import BackButton from './BackButton';
 
+const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
 /** Line-art video camera: rounded body, play mark, trapezoid lens (matches product reference). */
 function VideoCamPlayIcon({ className, videoOff }: { className?: string; videoOff?: boolean }) {
   return (
@@ -85,7 +87,7 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey?.trim() || "" });
         const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
         const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         audioContextRef.current = outputAudioContext;

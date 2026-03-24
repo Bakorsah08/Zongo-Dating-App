@@ -1,9 +1,11 @@
 
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
+const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
 // Standard chat response
 export const generateChatResponse = async (userMessage: string, partnerName: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  const ai = new GoogleGenAI({ apiKey: geminiApiKey?.trim() || "" });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',

@@ -99,6 +99,22 @@ const DEFAULT_ME: User = {
   badgeTier: 'none',
 };
 
+const getOAuthRedirectUrl = (): string => {
+  const appUrl = import.meta.env.VITE_APP_URL?.trim();
+  if (import.meta.env.PROD && appUrl) {
+    try {
+      const parsed = new URL(appUrl);
+      parsed.pathname = '/';
+      parsed.search = '';
+      parsed.hash = '';
+      return parsed.toString();
+    } catch {
+      // Invalid VITE_APP_URL should not block local fallback behavior.
+    }
+  }
+  return `${window.location.origin}/`;
+};
+
 const App: React.FC = () => {
   const supabaseEnabled = isSupabaseConfigured();
   const prodRequiresSupabase = import.meta.env.PROD;
@@ -894,7 +910,7 @@ const App: React.FC = () => {
               }
               const { error } = await getSupabase().auth.signInWithOAuth({
                 provider: 'google',
-                options: { redirectTo: `${window.location.origin}/` },
+                options: { redirectTo: getOAuthRedirectUrl() },
               });
               if (error) return { error: error.message };
               return undefined;

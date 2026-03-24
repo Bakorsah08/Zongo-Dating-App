@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tunnel": "npx --yes localtunnel --port 3000",
     "check:secrets": "node scripts/secret-scan.mjs",
+    "test:rls": "node scripts/rls-negative-test.mjs",
     "setup:hooks": "node scripts/setup-hooks.mjs",
     "supabase:migrate": "node scripts/supabase-apply-migrations.mjs"
   },

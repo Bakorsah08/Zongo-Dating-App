@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { getUsers, getBadges, getMonetizationSettings, getExploreCarousel } from '../data';
-import type { User, UserGender } from '../types';
+import { MOCK_AI_COMPANIONS } from '../constants';
+import type { ExploreCarouselAd, User, UserGender } from '../types';
 import {
   getDiscoveryPreferences,
   setDiscoveryPreferences,
@@ -11,12 +12,23 @@ import {
 
 interface DiscoverViewProps {
   userGender?: UserGender;
+  /** Logged-in user id (hide self from grid). Defaults to legacy mock id `me`. */
+  currentUserId?: string;
   onSelectUser: (user: User) => void;
   onSelectLive: (user: User) => void;
   onGoLive?: () => void;
   /** Increment (e.g. from Profile → Discovery preferences) to open the filter sheet. */
   exploreFilterOpenSignal?: number;
   blockedUserIds?: string[];
+  /** When true, human tab uses `cloudHumanUsers` from the server; AI tab uses bundled companions. */
+  useRemoteHumanProfiles?: boolean;
+  cloudHumanUsers?: User[];
+  cloudDiscoverLoading?: boolean;
+  cloudDiscoverError?: string | null;
+  onReloadCloudDiscover?: () => void;
+  /** Server-backed carousel slides when non-empty and `useRemoteCarousel` is true. */
+  cloudCarouselAds?: ExploreCarouselAd[];
+  useRemoteCarousel?: boolean;
 }
 
 const AI_PERSONALITIES = ['Any', 'Romantic', 'Playful', 'Calm', 'Intellectual'];
@@ -27,9 +39,14 @@ const getBadgeRank = (user: User): number => {
   return getBadges().find(b => b.id === tier)?.rank ?? 0;
 };
 
-/** First Explore grid cell — rotating carousel of live ads from Ad centre. */
-const ExploreCarouselTile: React.FC = () => {
-  const { ads } = getExploreCarousel();
+/** First Explore grid cell — rotating carousel (database first, then admin centre). */
+const ExploreCarouselTile: React.FC<{
+  cloudCarouselAds?: ExploreCarouselAd[];
+  useRemoteCarousel?: boolean;
+}> = ({ cloudCarouselAds = [], useRemoteCarousel = false }) => {
+  const localAds = getExploreCarousel().ads;
+  const ads =
+    useRemoteCarousel && cloudCarouselAds.length > 0 ? cloudCarouselAds : localAds;
   const now = Date.now();
   const liveAds = ads.filter(
     (a) => a.enabled && (!a.campaignEndsAt || a.campaignEndsAt > now)
@@ -151,11 +168,19 @@ function distanceLine(
 
 const DiscoverView: React.FC<DiscoverViewProps> = ({
   userGender,
+  currentUserId = 'me',
   onSelectUser,
   onSelectLive,
   onGoLive,
   exploreFilterOpenSignal = 0,
   blockedUserIds = [],
+  useRemoteHumanProfiles = false,
+  cloudHumanUsers = [],
+  cloudDiscoverLoading = false,
+  cloudDiscoverError = null,
+  onReloadCloudDiscover,
+  cloudCarouselAds = [],
+  useRemoteCarousel = false,
 }) => {
   const liveStreamingEnabled = getMonetizationSettings().liveStreamingEnabled;
   const initial = getDiscoveryPreferences();
@@ -231,10 +256,17 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
 
   const blockedSet = useMemo(() => new Set(blockedUserIds), [blockedUserIds]);
 
+  const baseUserPool = useMemo(() => {
+    if (useRemoteHumanProfiles) {
+      return profileType === 'human' ? cloudHumanUsers : [...MOCK_AI_COMPANIONS];
+    }
+    return getUsers();
+  }, [useRemoteHumanProfiles, cloudHumanUsers, profileType]);
+
   const filteredUsers = useMemo(() => {
-    const allUsers = getUsers();
+    const allUsers = baseUserPool;
     let filtered = allUsers
-      .filter((user) => user.id !== 'me')
+      .filter((user) => user.id !== currentUserId)
       .filter((user) => !blockedSet.has(user.id))
       .filter(user => {
         const matchesOnline = filterOnline === 'all' || user.isOnline;
@@ -274,7 +306,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
     }
 
     if (activeTextFilter === 'newcomer') {
-      const indexById = new Map(allUsers.map((u, i) => [u.id, i]));
+      const indexById = new Map<string, number>(baseUserPool.map((u, i) => [u.id, i]));
       // Newest assumed to be the most recently inserted (towards end of array)
       return [...filtered].sort((a, b) => (indexById.get(b.id) ?? 0) - (indexById.get(a.id) ?? 0));
     }
@@ -286,7 +318,17 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
       if (rankB !== rankA) return rankB - rankA;
       return a.distance - b.distance;
     });
-  }, [userGender, filterOnline, maxDistance, minAge, maxAge, activeTextFilter, blockedSet]);
+  }, [
+    userGender,
+    currentUserId,
+    filterOnline,
+    maxDistance,
+    minAge,
+    maxAge,
+    activeTextFilter,
+    blockedSet,
+    baseUserPool,
+  ]);
 
   const areHumanFiltersActive = filterOnline === 'online' || maxDistance < 50 || minAge > 18 || maxAge < 50;
   const areAIFiltersActive = aiMinAge > 18 || aiMaxAge < 35 || aiPersonality !== 'Any' || aiStyle !== 'Any';
@@ -468,8 +510,27 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
       )}
 
       <div className="grid w-full grid-cols-2 gap-[0.225rem] px-[0.15rem] pb-24 sm:gap-[0.3rem] sm:px-[0.3rem]">
-        <ExploreCarouselTile />
-        {filteredUsers.length > 0 ? (
+        <ExploreCarouselTile cloudCarouselAds={cloudCarouselAds} useRemoteCarousel={useRemoteCarousel} />
+        {cloudDiscoverError ? (
+          <div className="col-span-2 flex flex-col items-center justify-center gap-2 rounded-[0.65rem] border border-dashed border-red-200 bg-red-50/80 px-3 py-6 text-center">
+            <p className="text-sm font-semibold text-red-800">{cloudDiscoverError}</p>
+            {onReloadCloudDiscover ? (
+              <button
+                type="button"
+                onClick={onReloadCloudDiscover}
+                className="rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white"
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {cloudDiscoverLoading && !cloudDiscoverError ? (
+          <div className="col-span-2 flex aspect-[3/4] max-h-40 items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 text-sm text-zinc-500">
+            Loading people…
+          </div>
+        ) : null}
+        {!cloudDiscoverLoading && filteredUsers.length > 0 ? (
           filteredUsers.map((user) => (
             <div 
               key={user.id}
@@ -520,13 +581,13 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
               </div>
             </div>
           ))
-        ) : (
+        ) : !cloudDiscoverLoading ? (
           <div className="flex aspect-[3/4] flex-col items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 px-3 text-center">
             <span className="text-3xl grayscale opacity-50">🔍</span>
             <h3 className="mt-2 text-sm font-bold text-zinc-600">No results</h3>
             <p className="mt-1 text-[10px] text-zinc-500">Try adjusting filters</p>
           </div>
-        )}
+        ) : null}
       </div>
 
     </div>

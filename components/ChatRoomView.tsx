@@ -3,16 +3,30 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { User, Message, Gift } from '../types';
 import { generateChatResponse } from '../services/geminiService';
 import { getGifts, getMonetizationSettings } from '../data';
+import {
+  listMessages,
+  sendMessage,
+  subscribeToConversationMessages,
+  unsubscribeChannel,
+} from '../services/supabaseMessaging';
 import BackButton from './BackButton';
 
 interface ChatRoomViewProps {
   partner: User;
+  /** Current user id for outgoing messages (use real auth id when not using mock `me`). */
+  selfUserId?: string;
+  /** Persisted thread (human-human or human-AI with AI replies local-only). */
+  cloudChat?: { conversationId: string; partnerIsAi: boolean };
   onBack: () => void;
   onVideoCall: () => void;
   /** Voice-only call (tokens deducted in parent when applicable). */
   onAudioCall: () => void;
   onViewProfile: () => void;
   deductTokens: (amount: number) => boolean;
+  /** Upload to Supabase Storage; required for persisted media in `cloudChat` threads. */
+  uploadChatMedia?: (blob: Blob, mimeType?: string) => Promise<string | null>;
+  /** Persist gift to `gift_events` after tokens are deducted. */
+  onGiftRecorded?: (gift: Gift, partnerId: string) => void;
 }
 
 /** Curated picker — common chat / reaction emojis (no extra dependency). */
@@ -25,16 +39,18 @@ const CHAT_EMOJIS: string[] = [
 
 const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   partner,
+  selfUserId = 'me',
+  cloudChat,
   onBack,
   onVideoCall,
   onAudioCall,
   onViewProfile,
   deductTokens,
+  uploadChatMedia,
+  onGiftRecorded,
 }) => {
   const { videoCallEnabled, giftingEnabled } = getMonetizationSettings();
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', senderId: partner.id, text: `Hey! I'm ${partner.name}. Nice to meet you!`, timestamp: Date.now() - 100000 }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,6 +75,47 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (cloudChat) return;
+    setMessages([
+      {
+        id: 'local-welcome',
+        senderId: partner.id,
+        text: `Hey! I'm ${partner.name}. Nice to meet you!`,
+        timestamp: Date.now() - 100000,
+      },
+    ]);
+  }, [cloudChat, partner.id, partner.name]);
+
+  useEffect(() => {
+    if (!cloudChat) return;
+    let channel: ReturnType<typeof subscribeToConversationMessages> = null;
+    let cancelled = false;
+    (async () => {
+      const list = await listMessages(cloudChat.conversationId);
+      if (cancelled) return;
+      if (list.length === 0 && cloudChat.partnerIsAi) {
+        setMessages([
+          {
+            id: 'ai-welcome',
+            senderId: partner.id,
+            text: `Hey! I'm ${partner.name}. Nice to meet you!`,
+            timestamp: Date.now() - 100000,
+          },
+        ]);
+      } else {
+        setMessages(list);
+      }
+      channel = subscribeToConversationMessages(cloudChat.conversationId, (m) => {
+        setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      });
+    })();
+    return () => {
+      cancelled = true;
+      unsubscribeChannel(channel);
+    };
+  }, [cloudChat?.conversationId, cloudChat?.partnerIsAi, partner.id, partner.name]);
 
   useEffect(() => {
     if (!showEmojiPicker) return;
@@ -96,10 +153,11 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
 
   const handleSendGift = (gift: Gift) => {
     if (!deductTokens(gift.value)) return;
+    onGiftRecorded?.(gift, partner.id);
     setShowGiftPicker(false);
     const line: Message = {
       id: Date.now().toString(),
-      senderId: 'me',
+      senderId: selfUserId,
       text: `sent a gift: ${gift.icon} ${gift.name}`,
       timestamp: Date.now(),
     };
@@ -142,28 +200,57 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
         const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || 'audio/webm' });
         recordChunksRef.current = [];
         if (blob.size < 64) return;
-        const url = URL.createObjectURL(blob);
-        voiceBlobUrlsRef.current.push(url);
-        const voiceMsg: Message = {
-          id: Date.now().toString(),
-          senderId: 'me',
-          audioUrl: url,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, voiceMsg]);
-        setIsTyping(true);
-        setTimeout(() => {
-          setIsTyping(false);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `${Date.now()}-v`,
-              senderId: partner.id,
-              text: '🎤 Nice voice note!',
-              timestamp: Date.now(),
-            },
-          ]);
-        }, 1000);
+        void (async () => {
+          if (cloudChat && uploadChatMedia) {
+            const publicUrl = await uploadChatMedia(blob, blob.type || 'audio/webm');
+            if (publicUrl) {
+              const sent = await sendMessage(cloudChat.conversationId, selfUserId, {
+                audio_url: publicUrl,
+              });
+              if (sent) {
+                setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+              }
+              if (cloudChat.partnerIsAi) {
+                setIsTyping(true);
+                setTimeout(() => {
+                  setIsTyping(false);
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: `${Date.now()}-v`,
+                      senderId: partner.id,
+                      text: '🎤 Nice voice note!',
+                      timestamp: Date.now(),
+                    },
+                  ]);
+                }, 800);
+              }
+              return;
+            }
+          }
+          const url = URL.createObjectURL(blob);
+          voiceBlobUrlsRef.current.push(url);
+          const voiceMsg: Message = {
+            id: Date.now().toString(),
+            senderId: selfUserId,
+            audioUrl: url,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, voiceMsg]);
+          setIsTyping(true);
+          setTimeout(() => {
+            setIsTyping(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `${Date.now()}-v`,
+                senderId: partner.id,
+                text: '🎤 Nice voice note!',
+                timestamp: Date.now(),
+              },
+            ]);
+          }, 1000);
+        })();
       };
       mediaRecorderRef.current = mr;
       if (!voiceHoldActiveRef.current) {
@@ -177,7 +264,7 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     } catch {
       window.alert('Microphone permission is needed to record a voice note.');
     }
-  }, [partner.id]);
+  }, [partner.id, cloudChat, uploadChatMedia, selfUserId]);
 
   const stopVoiceRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
@@ -246,67 +333,123 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   const handleSend = async () => {
     if (!input.trim()) return;
     setShowEmojiPicker(false);
+    const text = input.trim();
+    setInput('');
+
+    if (cloudChat) {
+      const sent = await sendMessage(cloudChat.conversationId, selfUserId, { text });
+      if (sent) {
+        setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+      }
+      if (cloudChat.partnerIsAi) {
+        setIsTyping(true);
+        const aiResponse = await generateChatResponse(text, partner.name);
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-${Date.now()}`,
+            senderId: partner.id,
+            text: aiResponse || "That's cool!",
+            timestamp: Date.now(),
+          },
+        ]);
+      }
+      return;
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
-      senderId: 'me',
-      text: input,
-      timestamp: Date.now()
+      senderId: selfUserId,
+      text,
+      timestamp: Date.now(),
     };
-    setInput('');
-    setMessages(prev => [...prev, userMsg]);
-    
+    setMessages((prev) => [...prev, userMsg]);
+
     setIsTyping(true);
-    const aiResponse = await generateChatResponse(input, partner.name);
-    
+    const aiResponse = await generateChatResponse(text, partner.name);
+
     setIsTyping(false);
     const partnerMsg: Message = {
       id: (Date.now() + 1).toString(),
       senderId: partner.id,
       text: aiResponse || "That's cool!",
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
-    setMessages(prev => [...prev, partnerMsg]);
+    setMessages((prev) => [...prev, partnerMsg]);
   };
   
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
 
-    const url = URL.createObjectURL(file);
-    const message: Message = {
-      id: Date.now().toString(),
-      senderId: 'me',
-      timestamp: Date.now()
-    };
+    void (async () => {
+      if (cloudChat && uploadChatMedia) {
+        const publicUrl = await uploadChatMedia(file, file.type);
+        if (!publicUrl) {
+          window.alert('Could not upload this file. Try a smaller image or video.');
+          return;
+        }
+        const payload =
+          file.type.startsWith('image/')
+            ? { image_url: publicUrl }
+            : file.type.startsWith('video/')
+              ? { video_url: publicUrl }
+              : null;
+        if (!payload) return;
+        const sent = await sendMessage(cloudChat.conversationId, selfUserId, payload);
+        if (sent) {
+          setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+        }
+        if (cloudChat.partnerIsAi) {
+          setIsTyping(true);
+          setTimeout(() => {
+            setIsTyping(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `${Date.now()}-m`,
+                senderId: partner.id,
+                text: file.type.startsWith('image/') ? 'Wow, great picture!' : 'Cool video!',
+                timestamp: Date.now(),
+              },
+            ]);
+          }, 1200);
+        }
+        return;
+      }
 
-    if (file.type.startsWith('image/')) {
-      message.imageUrl = url;
-    } else if (file.type.startsWith('video/')) {
-      message.videoUrl = url;
-    } else {
-      // Clean up if file is not supported
-      URL.revokeObjectURL(url);
-      return;
-    }
-
-    setMessages(prev => [...prev, message]);
-    
-    // Simulate AI response to media
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      const partnerMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        senderId: partner.id,
-        text: file.type.startsWith('image/') ? 'Wow, great picture!' : 'Cool video!',
-        timestamp: Date.now()
+      const url = URL.createObjectURL(file);
+      const message: Message = {
+        id: Date.now().toString(),
+        senderId: selfUserId,
+        timestamp: Date.now(),
       };
-      setMessages(prev => [...prev, partnerMsg]);
-    }, 1500);
-    
-    // Reset file input
-    event.target.value = '';
+
+      if (file.type.startsWith('image/')) {
+        message.imageUrl = url;
+      } else if (file.type.startsWith('video/')) {
+        message.videoUrl = url;
+      } else {
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      setMessages((prev) => [...prev, message]);
+
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        const partnerMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          senderId: partner.id,
+          text: file.type.startsWith('image/') ? 'Wow, great picture!' : 'Cool video!',
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, partnerMsg]);
+      }, 1500);
+    })();
   };
 
   const openMediaViewer = (url: string, type: 'image' | 'video') => {
@@ -335,7 +478,7 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     }
     if (msg.audioUrl) {
       const wrap =
-        msg.senderId === 'me' ? 'rounded-lg bg-white/20 p-1' : 'rounded-lg bg-zinc-100 p-1';
+        msg.senderId === selfUserId ? 'rounded-lg bg-white/20 p-1' : 'rounded-lg bg-zinc-100 p-1';
       return (
         <div className={wrap}>
           <audio
@@ -382,10 +525,10 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-zinc-50 p-4">
         <div className="mx-auto flex max-w-lg flex-col space-y-4">
           {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.senderId === 'me' ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex ${msg.senderId === selfUserId ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                  msg.senderId === 'me'
+                  msg.senderId === selfUserId
                     ? 'rounded-br-md bg-pink-600 text-white'
                     : 'rounded-bl-md border border-zinc-200 bg-white text-zinc-900'
                 }`}

@@ -1,12 +1,61 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, User, AppState } from './types';
+import type { Session } from '@supabase/supabase-js';
+import {
+  View,
+  User,
+  AppState,
+  UserGender,
+  type AppNotification,
+  type ExploreCarouselAd,
+  type UserAdSubmission,
+} from './types';
 import { getUsers, getBadges, getMonetizationSettings } from './data';
 import { adminStore } from './admin/store';
 import { getAppSession, setAppSession, setAppSessionGender, clearAppSession } from './appSession';
+import { isSupabaseConfigured, getSupabase } from './lib/supabaseClient';
+import {
+  fetchMyProfile,
+  ensureProfileRow,
+  updateMyProfile,
+  updateProfileGender,
+} from './services/supabaseProfile';
+import {
+  bootstrapWallet,
+  spendTokens,
+  cashOutWallet,
+  fetchUserWallet,
+} from './services/supabaseWallet';
+import { fetchDiscoverUsers, fetchProfilesByIds } from './services/supabaseDiscover';
+import {
+  addFollow,
+  removeFollow,
+  addBlock,
+  removeBlock,
+  listFollowingIds,
+  listBlockedIds,
+} from './services/supabaseGraph';
+import {
+  ensureMatchPair,
+  getOrCreateConversation,
+  listInboxForUser,
+  type InboxSummary,
+} from './services/supabaseMessaging';
+import {
+  fetchNotificationsForUser,
+  markAllNotificationsReadDb,
+  insertSuperLikeNotificationDb,
+  appNotificationFromRow,
+} from './services/supabaseNotificationsApi';
+import { fetchLiveCarouselAdsFromDb } from './services/supabaseCarousel';
+import { fetchUserPreferencesFromDb, upsertUserPreferencesDb } from './services/supabaseUserPreferences';
+import { insertUserAdSubmissionDb, fetchUserAdSubmissionsFromDb } from './services/supabaseUserAds';
+import { recordGiftEvent } from './services/supabaseGifts';
+import { uploadChatMedia as uploadChatMediaToStorage } from './services/supabaseStorage';
+import type { AppNotificationRow } from './models/supabase';
 import DiscoverView from './components/DiscoverView';
 import LandingPage from './components/LandingPage';
 import GenderSelectPage from './components/GenderSelectPage';
-import ChatListView from './components/ChatListView';
+import ChatListView, { type ChatInboxRow } from './components/ChatListView';
 import ChatRoomView from './components/ChatRoomView';
 import VideoCallView from './components/VideoCallView';
 import LiveStreamView from './components/LiveStreamView';
@@ -28,6 +77,10 @@ import {
   addBlockedUserId,
   getNotificationPreferences,
   getPrivacyPreferences,
+  mergeUserPreferences,
+  replaceUserPreferencesCache,
+  registerPreferencesCloudWriter,
+  USER_PREFERENCES_DEFAULTS,
 } from './userPreferencesStore';
 
 const DEFAULT_ME: User = {
@@ -47,7 +100,14 @@ const DEFAULT_ME: User = {
 };
 
 const App: React.FC = () => {
+  const supabaseEnabled = isSupabaseConfigured();
+  const prodRequiresSupabase = import.meta.env.PROD;
+  const mockAuthEnabled = !supabaseEnabled && !prodRequiresSupabase;
   const [appSession, setAppSessionState] = useState<ReturnType<typeof getAppSession>>(getAppSession);
+  const [sbSession, setSbSession] = useState<Session | null>(null);
+  const [sbAuthResolved, setSbAuthResolved] = useState(!supabaseEnabled);
+  const [sbProfileResolved, setSbProfileResolved] = useState(!supabaseEnabled);
+  const [serverGender, setServerGender] = useState<UserGender | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
   const [scrollEndTimer, setScrollEndTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
@@ -55,19 +115,117 @@ const App: React.FC = () => {
     setAppSessionState(getAppSession());
   }, []);
 
-  const handleSignUp = (email: string, _password: string) => {
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    const sb = getSupabase();
+    sb.auth.getSession().then(({ data: { session } }) => {
+      setSbSession(session);
+      setSbAuthResolved(true);
+    });
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      setSbSession(session);
+      if (!session) {
+        setServerGender(null);
+        setSbProfileResolved(true);
+      } else {
+        setSbProfileResolved(false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [supabaseEnabled]);
+
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    if (!sbSession?.user) {
+      setSbProfileResolved(true);
+      return;
+    }
+    let cancelled = false;
+    setSbProfileResolved(false);
+    (async () => {
+      const uid = sbSession.user.id;
+      const email = sbSession.user.email ?? undefined;
+      let merged = await fetchMyProfile(uid, DEFAULT_ME);
+      if (!merged) {
+        await ensureProfileRow(uid, email);
+        merged = await fetchMyProfile(uid, DEFAULT_ME);
+      }
+      if (cancelled) return;
+      if (merged) {
+        setState((prev) => {
+          const nextUser = { ...DEFAULT_ME, ...merged };
+          const inStore = getUsers().some((u) => u.id === nextUser.id);
+          if (!inStore) adminStore.addUser(nextUser);
+          else adminStore.updateUser(nextUser.id, merged);
+          return {
+            ...prev,
+            currentUser: { ...prev.currentUser, ...nextUser },
+          };
+        });
+        setServerGender(merged.gender ?? null);
+      } else {
+        setState((prev) => ({
+          ...prev,
+          currentUser: {
+            ...prev.currentUser,
+            id: uid,
+            name: email?.split('@')[0] || 'Member',
+          },
+        }));
+        setServerGender(null);
+      }
+      setSbProfileResolved(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseEnabled, sbSession?.user?.id]);
+
+  const handleMockEmailAuth = (email: string, _password: string) => {
     setAppSession({ email });
     setAppSessionState(getAppSession());
   };
 
-  const handleGoogleSignUp = () => {
+  const handleMockGoogleAuth = () => {
     setAppSession({ email: 'user@gmail.com' });
     setAppSessionState(getAppSession());
   };
 
-  const handleGenderSelect = (gender: 'male' | 'female') => {
-    setAppSessionGender(gender);
-    setAppSessionState(getAppSession());
+  const handleGenderSelect = async (gender: UserGender) => {
+    if (supabaseEnabled && sbSession?.user?.id) {
+      await updateProfileGender(sbSession.user.id, gender);
+      setServerGender(gender);
+    } else {
+      setAppSessionGender(gender);
+      setAppSessionState(getAppSession());
+    }
+  };
+
+  const handleAppLogout = async () => {
+    clearAppSession();
+    setAppSessionState(null);
+    if (supabaseEnabled) {
+      await getSupabase().auth.signOut();
+      setServerGender(null);
+      const users = getUsers();
+      const meUser = users.find((u) => u.id === 'me');
+      const currentUser = meUser ? { ...DEFAULT_ME, ...meUser } : DEFAULT_ME;
+      if (!meUser) adminStore.addUser(currentUser);
+      setState((prev) => ({
+        ...prev,
+        currentUser,
+        matches: users.filter((u) => u.id !== 'me').slice(0, 2),
+      }));
+      setCloudDiscoverUsers([]);
+      setInboxSummaries([]);
+      setCloudNotifs([]);
+      setFollowingUsersCloud([]);
+      setCloudDiscoverError(null);
+      setCloudCarouselAds([]);
+      setCloudUserAdSubmissions([]);
+    }
   };
 
   const [state, setState] = useState<AppState>(() => {
@@ -91,15 +249,174 @@ const App: React.FC = () => {
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>(() => getPrivacyPreferences().blockedUserIds);
   const [exploreFilterSignal, setExploreFilterSignal] = useState(0);
   const [prefsTick, setPrefsTick] = useState(0);
+  const [cloudDiscoverUsers, setCloudDiscoverUsers] = useState<User[]>([]);
+  const [cloudDiscoverLoading, setCloudDiscoverLoading] = useState(false);
+  const [cloudDiscoverError, setCloudDiscoverError] = useState<string | null>(null);
+  const [inboxSummaries, setInboxSummaries] = useState<InboxSummary[]>([]);
+  const [activeCloudConversationId, setActiveCloudConversationId] = useState<string | null>(null);
+  const [cloudNotifs, setCloudNotifs] = useState<AppNotification[]>([]);
+  const [followingUsersCloud, setFollowingUsersCloud] = useState<User[]>([]);
+  const [cloudCarouselAds, setCloudCarouselAds] = useState<ExploreCarouselAd[]>([]);
+  const [cloudUserAdSubmissions, setCloudUserAdSubmissions] = useState<UserAdSubmission[]>([]);
+  const [purchasePending, setPurchasePending] = useState(false);
+  const [purchaseNotice, setPurchaseNotice] = useState<string | null>(null);
   const currentUserRef = useRef(state.currentUser);
   currentUserRef.current = state.currentUser;
+  const prefsUidRef = useRef<string | undefined>(undefined);
+  prefsUidRef.current = sbSession?.user?.id;
+  const prevViewRef = useRef<View>(state.currentView);
+
+  const loadCloudData = useCallback(async () => {
+    if (!supabaseEnabled || !sbSession?.user?.id || !sbProfileResolved) return;
+    const uid = sbSession.user.id;
+    setCloudDiscoverLoading(true);
+    setCloudDiscoverError(null);
+    try {
+      const starter = getMonetizationSettings().starterTokens;
+      const [
+        wallet,
+        following,
+        blocked,
+        discoverList,
+        inbox,
+        notifs,
+        carouselAds,
+        prefsRemote,
+        adSubs,
+      ] = await Promise.all([
+        bootstrapWallet(uid, starter),
+        listFollowingIds(uid),
+        listBlockedIds(uid),
+        fetchDiscoverUsers(uid),
+        listInboxForUser(uid),
+        fetchNotificationsForUser(uid),
+        fetchLiveCarouselAdsFromDb(),
+        fetchUserPreferencesFromDb(uid),
+        fetchUserAdSubmissionsFromDb(uid),
+      ]);
+      if (wallet) {
+        setState((prev) => ({
+          ...prev,
+          tokens: wallet.token_balance,
+          currentUser: {
+            ...prev.currentUser,
+            earnings: wallet.earnings,
+            transferredOut: wallet.transferred_out,
+          },
+        }));
+      }
+      setState((prev) => ({
+        ...prev,
+        followingIds: following,
+        matches: inbox.map((x) => x.partner),
+      }));
+      setBlockedUserIds(blocked);
+      setCloudDiscoverUsers(discoverList);
+      setInboxSummaries(inbox);
+      setCloudNotifs(notifs);
+      setCloudCarouselAds(carouselAds);
+      setCloudUserAdSubmissions(adSubs);
+      let mergedPrefs = mergeUserPreferences(USER_PREFERENCES_DEFAULTS, prefsRemote ?? {});
+      mergedPrefs = mergeUserPreferences(mergedPrefs, {
+        privacy: { ...mergedPrefs.privacy, blockedUserIds: blocked },
+      });
+      replaceUserPreferencesCache(mergedPrefs);
+      setPrefsTick((t) => t + 1);
+    } catch (e) {
+      setCloudDiscoverError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setCloudDiscoverLoading(false);
+    }
+  }, [supabaseEnabled, sbSession?.user?.id, sbProfileResolved]);
+
+  useEffect(() => {
+    void loadCloudData();
+  }, [loadCloudData]);
+
+  useEffect(() => {
+    if (!supabaseEnabled || !sbSession?.user?.id) {
+      registerPreferencesCloudWriter(null);
+      return () => registerPreferencesCloudWriter(null);
+    }
+    registerPreferencesCloudWriter((p) => {
+      const uid = prefsUidRef.current;
+      if (!uid) return;
+      void upsertUserPreferencesDb(uid, p);
+    });
+    return () => registerPreferencesCloudWriter(null);
+  }, [supabaseEnabled, sbSession?.user?.id]);
+
+  useEffect(() => {
+    if (!supabaseEnabled || !sbSession?.user?.id) return;
+    const uid = sbSession.user.id;
+    const sb = getSupabase();
+    const ch = sb
+      .channel(`app-notifs-${uid}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'app_notifications',
+          filter: `recipient_id=eq.${uid}`,
+        },
+        (payload) => {
+          const row = payload.new as AppNotificationRow;
+          const n = appNotificationFromRow(row);
+          setCloudNotifs((prev) => {
+            if (prev.some((x) => x.id === n.id)) return prev;
+            return [n, ...prev];
+          });
+          if (
+            n.type === 'super_like' &&
+            n.fromUserId &&
+            n.fromUserId !== uid &&
+            getNotificationPreferences().superLikeEnabled
+          ) {
+            setSuperLikeToast('You received a Super Like!');
+            window.setTimeout(() => setSuperLikeToast(null), 4500);
+          }
+          setNotifTick((t) => t + 1);
+        }
+      )
+      .subscribe();
+    return () => {
+      void sb.removeChannel(ch);
+    };
+  }, [supabaseEnabled, sbSession?.user?.id]);
+
+  useEffect(() => {
+    if (!supabaseEnabled || state.followingIds.length === 0) {
+      setFollowingUsersCloud([]);
+      return;
+    }
+    void fetchProfilesByIds(state.followingIds).then(setFollowingUsersCloud);
+  }, [supabaseEnabled, state.followingIds]);
+
+  useEffect(() => {
+    if (prevViewRef.current === View.CHAT_ROOM && state.currentView !== View.CHAT_ROOM) {
+      setActiveCloudConversationId(null);
+    }
+    prevViewRef.current = state.currentView;
+  }, [state.currentView]);
+
+  useEffect(() => {
+    if (!notifPanelOpen || !supabaseEnabled || !sbSession?.user?.id) return;
+    void fetchNotificationsForUser(sbSession.user.id).then(setCloudNotifs);
+  }, [notifPanelOpen, supabaseEnabled, sbSession?.user?.id]);
 
   useEffect(() => {
     const c = adminStore.consumePendingTokenCredits(state.currentUser.id);
     if (c > 0) {
-      setState((prev) => ({ ...prev, tokens: prev.tokens + c }));
+      setState((prev) => {
+        const next = prev.tokens + c;
+        if (supabaseEnabled && sbSession?.user?.id === state.currentUser.id) {
+          // Deprecated local refund queue should not mutate server wallet directly.
+        }
+        return { ...prev, tokens: next };
+      });
     }
-  }, [state.currentUser.id]);
+  }, [state.currentUser.id, supabaseEnabled, sbSession?.user?.id]);
 
   useEffect(() => {
     if (adminStore.processExpiredUserAds()) {
@@ -162,14 +479,14 @@ const App: React.FC = () => {
 
   const profileInAppNotifications = useMemo(() => {
     if (!state.currentUser) return [];
-    const raw = getNotificationsForUser(state.currentUser.id);
+    const raw = supabaseEnabled ? cloudNotifs : getNotificationsForUser(state.currentUser.id);
     const { superLikeEnabled, systemEnabled } = getNotificationPreferences();
     return raw.filter((n) => {
       if (n.type === 'super_like' && !superLikeEnabled) return false;
       if (n.type === 'system' && !systemEnabled) return false;
       return true;
     });
-  }, [state.currentUser?.id, notifTick, prefsTick]);
+  }, [state.currentUser?.id, notifTick, prefsTick, supabaseEnabled, cloudNotifs]);
 
   const notifUnreadCount = useMemo(
     () => profileInAppNotifications.filter((n) => !n.read).length,
@@ -180,12 +497,18 @@ const App: React.FC = () => {
   const handleNotifBellToggle = useCallback(() => {
     setNotifPanelOpen((prev) => {
       if (!prev && currentUserId) {
-        markAllNotificationsRead(currentUserId);
+        if (supabaseEnabled && sbSession?.user?.id) {
+          void markAllNotificationsReadDb(sbSession.user.id).then(() => {
+            setCloudNotifs((list) => list.map((n) => ({ ...n, read: true })));
+          });
+        } else {
+          markAllNotificationsRead(currentUserId);
+        }
         setNotifTick((t) => t + 1);
       }
       return !prev;
     });
-  }, [currentUserId]);
+  }, [currentUserId, supabaseEnabled, sbSession?.user?.id]);
 
   useEffect(() => {
     const v = state.currentView;
@@ -202,9 +525,21 @@ const App: React.FC = () => {
   const userAdSubmissions = useMemo(
     () =>
       state.currentUser
-        ? adminStore.getUserAdSubmissionsForUser(state.currentUser.id)
+        ? supabaseEnabled
+          ? cloudUserAdSubmissions
+          : adminStore.getUserAdSubmissionsForUser(state.currentUser.id)
         : [],
-    [state.currentUser?.id, userAdSubmissionsTick]
+    [state.currentUser?.id, userAdSubmissionsTick, supabaseEnabled, cloudUserAdSubmissions]
+  );
+
+  const handleUnblockUser = useCallback(
+    (userId: string) => {
+      if (supabaseEnabled && sbSession?.user?.id) {
+        void removeBlock(sbSession.user.id, userId);
+      }
+      setBlockedUserIds((prev) => prev.filter((id) => id !== userId));
+    },
+    [supabaseEnabled, sbSession?.user?.id]
   );
 
   const setView = (view: View) => {
@@ -226,11 +561,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    clearAppSession();
-    setAppSessionState(null);
-  };
-  
   const handleMenuAction = (viewToGo: View) => {
     setIsHomeMenuOpen(false);
     setTimeout(() => {
@@ -248,27 +578,56 @@ const App: React.FC = () => {
   };
 
   const toggleFollow = (userId: string) => {
-    setState(prev => ({
-      ...prev,
-      followingIds: prev.followingIds.includes(userId)
-        ? prev.followingIds.filter(id => id !== userId)
-        : [...prev.followingIds, userId]
-    }));
+    setState((prev) => {
+      const isF = prev.followingIds.includes(userId);
+      const me = sbSession?.user?.id;
+      if (supabaseEnabled && me) {
+        void (isF ? removeFollow(me, userId) : addFollow(me, userId));
+      }
+      return {
+        ...prev,
+        followingIds: isF ? prev.followingIds.filter((id) => id !== userId) : [...prev.followingIds, userId],
+      };
+    });
   };
 
   const ensureFollowing = (userId: string) => {
     setState((prev) => {
       if (prev.followingIds.includes(userId)) return prev;
+      const me = sbSession?.user?.id;
+      if (supabaseEnabled && me) {
+        void addFollow(me, userId);
+      }
       return { ...prev, followingIds: [...prev.followingIds, userId] };
     });
   };
 
   const openChat = (user: User) => {
-    const isAlreadyMatched = state.matches?.find(m => m.id === user.id);
-    if (!isAlreadyMatched && !user.isAI) {
-      setState(prev => ({ ...prev, matches: [...(prev.matches || []), user] }));
-    }
-    setState(prev => ({ ...prev, currentView: View.CHAT_ROOM, selectedChatPartner: user }));
+    void (async () => {
+      let cid: string | null = null;
+      let inboxPartners: User[] | null = null;
+      if (supabaseEnabled && sbSession?.user?.id && !user.isAI) {
+        const me = sbSession.user.id;
+        await ensureMatchPair(me, user.id);
+        cid = await getOrCreateConversation(me, user.id);
+        const inbox = await listInboxForUser(me);
+        setInboxSummaries(inbox);
+        inboxPartners = inbox.map((x) => x.partner);
+      }
+      setActiveCloudConversationId(cid);
+      setState((prev) => {
+        const baseMatches = inboxPartners ?? prev.matches ?? [];
+        const isAlreadyMatched = baseMatches.some((m) => m.id === user.id);
+        const nextMatches =
+          !isAlreadyMatched && !user.isAI ? [...baseMatches, user] : baseMatches;
+        return {
+          ...prev,
+          matches: nextMatches,
+          currentView: View.CHAT_ROOM,
+          selectedChatPartner: user,
+        };
+      });
+    })();
   };
 
   const openLive = (user: User) => {
@@ -283,33 +642,51 @@ const App: React.FC = () => {
 
   const handleUpdateAlbum = (newAlbum: string[]) => {
     if (!state.currentUser) return;
-    adminStore.updateUser(state.currentUser.id, { album: newAlbum });
-    setState(prev => ({ ...prev, currentUser: { ...prev.currentUser, album: newAlbum } }));
+    const id = state.currentUser.id;
+    adminStore.updateUser(id, { album: newAlbum });
+    setState((prev) => ({ ...prev, currentUser: { ...prev.currentUser, album: newAlbum } }));
+    if (supabaseEnabled && sbSession?.user?.id) {
+      void updateMyProfile(sbSession.user.id, { album: newAlbum });
+    }
   };
-  
+
   const handleUpdateAvatar = (newAvatarUrl: string) => {
     if (!state.currentUser) return;
-    adminStore.updateUser(state.currentUser.id, { avatar: newAvatarUrl });
-    setState(prev => ({ ...prev, currentUser: { ...prev.currentUser, avatar: newAvatarUrl } }));
+    const id = state.currentUser.id;
+    adminStore.updateUser(id, { avatar: newAvatarUrl });
+    setState((prev) => ({ ...prev, currentUser: { ...prev.currentUser, avatar: newAvatarUrl } }));
+    if (supabaseEnabled && sbSession?.user?.id) {
+      void updateMyProfile(sbSession.user.id, { avatar: newAvatarUrl });
+    }
   };
 
   const handleUpdateProfile = (updates: Partial<User>) => {
-    setState(prev => ({
-      ...prev,
-      currentUser: { ...prev.currentUser, ...updates }
-    }));
-    adminStore.updateUser('me', updates);
+    setState((prev) => {
+      const id = prev.currentUser.id;
+      adminStore.updateUser(id, updates);
+      return {
+        ...prev,
+        currentUser: { ...prev.currentUser, ...updates },
+      };
+    });
+    if (supabaseEnabled && sbSession?.user?.id) {
+      void updateMyProfile(sbSession.user.id, updates);
+    }
   };
 
   const handlePurchaseBadge = (tier: import('./types').BadgeTier): boolean => {
     const badge = getBadges().find((b) => b.id === tier);
     if (!badge || badge.tokenCost === 0) return false;
     if (state.tokens >= badge.tokenCost) {
-      setState(prev => ({
-        ...prev,
-        tokens: prev.tokens - badge.tokenCost,
-        currentUser: { ...prev.currentUser, badgeTier: tier }
-      }));
+      setState((prev) => {
+        const next = prev.tokens - badge.tokenCost;
+        if (supabaseEnabled && sbSession?.user?.id) void spendTokens(sbSession.user.id, badge.tokenCost);
+        return {
+          ...prev,
+          tokens: next,
+          currentUser: { ...prev.currentUser, badgeTier: tier },
+        };
+      });
       return true;
     }
     setView(View.TOKEN_SHOP);
@@ -318,21 +695,45 @@ const App: React.FC = () => {
 
   const deductTokens = (amount: number): boolean => {
     if (state.tokens && state.tokens >= amount) {
-      setState(prev => ({ ...prev, tokens: (prev.tokens || 0) - amount }));
+      setState((prev) => {
+        const next = (prev.tokens || 0) - amount;
+        if (supabaseEnabled && sbSession?.user?.id) void spendTokens(sbSession.user.id, amount);
+        return { ...prev, tokens: next };
+      });
       return true;
     }
     setView(View.TOKEN_SHOP);
     return false;
   };
 
-  const addTokens = (amount: number, priceUsd?: number) => {
-    setState(prev => ({ ...prev, tokens: prev.tokens + amount }));
+  const addTokens = async (amount: number, priceUsd?: number) => {
+    if (supabaseEnabled && sbSession?.user?.id) {
+      const before = state.tokens ?? 0;
+      setPurchasePending(true);
+      setPurchaseNotice('Payment submitted. Waiting for secure webhook confirmation to credit tokens.');
+      // In production this should open real checkout. For now we only poll wallet for webhook-applied credits.
+      for (let i = 0; i < 12; i += 1) {
+        await new Promise((r) => window.setTimeout(r, 2500));
+        const wallet = await fetchUserWallet(sbSession.user.id);
+        if (wallet && wallet.token_balance > before) {
+          setState((prev) => ({ ...prev, tokens: wallet.token_balance }));
+          setPurchaseNotice('Tokens credited from server confirmation.');
+          setPurchasePending(false);
+          return;
+        }
+      }
+      setPurchaseNotice('Still waiting for payment provider confirmation. Your tokens will appear automatically once confirmed.');
+      setPurchasePending(false);
+      return;
+    }
+
+    setState((prev) => ({ ...prev, tokens: prev.tokens + amount }));
     if (priceUsd != null && priceUsd > 0) {
       adminStore.addPlatformRevenueFromTokenSales(priceUsd);
     }
   };
 
-  const handleSubmitUserAd = (payload: {
+  const handleSubmitUserAd = async (payload: {
     tierId: string;
     durationDays: number;
     title: string;
@@ -343,18 +744,42 @@ const App: React.FC = () => {
     backgroundColor: string;
     linkUrl: string;
     displayDurationSec: number;
-  }): { success: boolean; error?: string } => {
+  }): Promise<{ success: boolean; error?: string }> => {
     const settings = getMonetizationSettings();
     const tier = settings.userAdDurationTiers.find((t) => t.id === payload.tierId);
     if (!tier) return { success: false, error: 'Invalid ad option.' };
     const cost = tier.tokenCost;
     if (!deductTokens(cost)) return { success: false, error: 'Not enough tokens.' };
+
+    if (supabaseEnabled && sbSession?.user?.id) {
+      const ins = await insertUserAdSubmissionDb(sbSession.user.id, {
+        durationDays: payload.durationDays,
+        tokensPaid: cost,
+        title: payload.title,
+        subtitle: payload.subtitle,
+        badgeLabel: payload.badgeLabel,
+        imageUrl: payload.imageUrl,
+        imageDataUrl: payload.imageDataUrl,
+        backgroundColor: payload.backgroundColor,
+        linkUrl: payload.linkUrl,
+        displayDurationSec: payload.displayDurationSec,
+      });
+      if (ins.ok === false) {
+        addTokens(cost);
+        return { success: false, error: ins.error };
+      }
+      const refreshed = await fetchUserAdSubmissionsFromDb(sbSession.user.id);
+      setCloudUserAdSubmissions(refreshed);
+      setUserAdSubmissionsTick((t) => t + 1);
+      return { success: true };
+    }
+
     const r = adminStore.submitUserAdSubmission({
       ...payload,
       userId: state.currentUser.id,
       tokensPaid: cost,
     });
-    if (!r.ok) {
+    if (r.ok === false) {
       addTokens(cost);
       return { success: false, error: r.error };
     }
@@ -363,21 +788,26 @@ const App: React.FC = () => {
   };
 
   const addEarnings = (amount: number) => {
-    setState(prev => {
+    setState((prev) => {
       const newEarnings = (prev.currentUser.earnings || 0) + amount;
-      adminStore.updateUser('me', { earnings: newEarnings });
+      adminStore.updateUser(prev.currentUser.id, { earnings: newEarnings });
+      if (supabaseEnabled && sbSession?.user?.id === prev.currentUser.id) return prev;
       return { ...prev, currentUser: { ...prev.currentUser, earnings: newEarnings } };
     });
   };
-  
+
   const handleCashOut = (amount: number) => {
     if (!state.currentUser) return;
+    const id = state.currentUser.id;
     const newEarnings = (state.currentUser.earnings ?? 0) - amount;
     const newTransferredOut = (state.currentUser.transferredOut ?? 0) + amount;
-    adminStore.updateUser('me', { earnings: newEarnings, transferredOut: newTransferredOut });
-    setState(prev => ({
+    adminStore.updateUser(id, { earnings: newEarnings, transferredOut: newTransferredOut });
+    if (supabaseEnabled && sbSession?.user?.id === id) {
+      void cashOutWallet(sbSession.user.id, amount);
+    }
+    setState((prev) => ({
       ...prev,
-      currentUser: { ...prev.currentUser, earnings: newEarnings, transferredOut: newTransferredOut }
+      currentUser: { ...prev.currentUser, earnings: newEarnings, transferredOut: newTransferredOut },
     }));
   };
 
@@ -397,25 +827,81 @@ const App: React.FC = () => {
     );
   }
 
-  if (!appSession) {
+  const waitingSupabaseBootstrap =
+    supabaseEnabled && (!sbAuthResolved || (sbSession !== null && !sbProfileResolved));
+
+  if (waitingSupabaseBootstrap) {
+    return (
+      <div className="flex flex-col min-h-screen bg-white text-zinc-900 max-w-md mx-auto items-center justify-center px-6 text-center">
+        <div className="text-pink-500 text-4xl animate-bounce">❤</div>
+        <p className="mt-4 font-bold tracking-widest uppercase">Signing you in…</p>
+        <p className="mt-2 text-sm text-zinc-500">Loading your profile from the server</p>
+      </div>
+    );
+  }
+
+  const showLanding = supabaseEnabled ? !sbSession : mockAuthEnabled ? !appSession : true;
+  if (showLanding) {
     return (
       <div className="min-h-screen bg-white flex justify-center">
         <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
-          <LandingPage onSignUp={handleSignUp} onGoogleSignUp={handleGoogleSignUp} />
+          <LandingPage
+            onEmailAuth={async (email, password, mode) => {
+              if (!supabaseEnabled) {
+                if (!mockAuthEnabled) {
+                  return { error: 'Production requires Supabase auth configuration.' };
+                }
+                handleMockEmailAuth(email, password);
+                return;
+              }
+              const sb = getSupabase();
+              if (mode === 'signUp') {
+                const { data, error } = await sb.auth.signUp({ email, password });
+                if (error) return { error: error.message };
+                if (data.user && !data.session) {
+                  return {
+                    info: 'Check your email to confirm your account, then log in.',
+                  };
+                }
+                return undefined;
+              }
+              const { error } = await sb.auth.signInWithPassword({ email, password });
+              if (error) return { error: error.message };
+              return undefined;
+            }}
+            onGoogleAuth={async () => {
+              if (!supabaseEnabled) {
+                if (!mockAuthEnabled) {
+                  return { error: 'Production requires Supabase auth configuration.' };
+                }
+                handleMockGoogleAuth();
+                return;
+              }
+              const { error } = await getSupabase().auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: `${window.location.origin}/` },
+              });
+              if (error) return { error: error.message };
+              return undefined;
+            }}
+          />
         </div>
       </div>
     );
   }
 
-  if (!appSession.gender) {
+  const showGenderGate = supabaseEnabled ? !serverGender : mockAuthEnabled ? !appSession?.gender : false;
+  if (showGenderGate) {
     return (
       <div className="min-h-screen bg-white flex justify-center">
         <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
-          <GenderSelectPage onSelect={handleGenderSelect} />
+          <GenderSelectPage onSelect={(g) => void handleGenderSelect(g)} />
         </div>
       </div>
     );
   }
+
+  const exploreGender: UserGender = supabaseEnabled ? serverGender! : appSession!.gender!;
 
   const isLiveView = state.currentView === View.LIVE_STREAM || state.currentView === View.HOST_LIVE;
   const isChatRoom = state.currentView === View.CHAT_ROOM;
@@ -429,19 +915,27 @@ const App: React.FC = () => {
       case View.EXPLORE:
         return (
           <DiscoverView
-            userGender={appSession.gender}
+            userGender={exploreGender}
+            currentUserId={state.currentUser.id}
             onSelectUser={openUserDetail}
             onSelectLive={openLive}
             onGoLive={() => setView(View.HOST_LIVE)}
             exploreFilterOpenSignal={exploreFilterSignal}
             blockedUserIds={blockedUserIds}
+            useRemoteHumanProfiles={supabaseEnabled}
+            cloudHumanUsers={cloudDiscoverUsers}
+            cloudDiscoverLoading={cloudDiscoverLoading}
+            cloudDiscoverError={cloudDiscoverError}
+            onReloadCloudDiscover={() => void loadCloudData()}
+            cloudCarouselAds={cloudCarouselAds}
+            useRemoteCarousel={supabaseEnabled}
           />
         );
       case View.FOLLOWING: {
         const blocked = new Set(blockedUserIds);
-        const followingUsers = getUsers().filter(
-          (u) => state.followingIds.includes(u.id) && !blocked.has(u.id)
-        );
+        const followingUsers = supabaseEnabled
+          ? followingUsersCloud.filter((u) => !blocked.has(u.id))
+          : getUsers().filter((u) => state.followingIds.includes(u.id) && !blocked.has(u.id));
         const badges = getBadges();
         return (
           <div className="min-h-full bg-white pb-24">
@@ -498,11 +992,35 @@ const App: React.FC = () => {
         );
       }
       case View.CHATS:
-        return <ChatListView matches={state.matches || []} onChatSelect={openChat} />;
+        return (
+          <ChatListView
+            matches={state.matches || []}
+            onChatSelect={openChat}
+            inboxRows={
+              supabaseEnabled
+                ? inboxSummaries.map(
+                    (s): ChatInboxRow => ({
+                      user: s.partner,
+                      preview: s.preview,
+                      at: s.at,
+                    })
+                  )
+                : undefined
+            }
+          />
+        );
       case View.CHAT_ROOM:
         return state.selectedChatPartner ? (
-          <ChatRoomView 
-            partner={state.selectedChatPartner} 
+          <ChatRoomView
+            partner={state.selectedChatPartner}
+            selfUserId={state.currentUser.id}
+            cloudChat={
+              supabaseEnabled &&
+              activeCloudConversationId &&
+              !state.selectedChatPartner.isAI
+                ? { conversationId: activeCloudConversationId, partnerIsAi: false }
+                : undefined
+            }
             onBack={() => setView(View.CHATS)}
             onVideoCall={() => setView(View.VIDEO_CALL)}
             onAudioCall={() => {
@@ -512,6 +1030,22 @@ const App: React.FC = () => {
             }}
             onViewProfile={() => openUserDetail(state.selectedChatPartner!)}
             deductTokens={deductTokens}
+            uploadChatMedia={
+              supabaseEnabled && sbSession?.user?.id
+                ? (blob, mime) => uploadChatMediaToStorage(sbSession.user.id, blob, mime)
+                : undefined
+            }
+            onGiftRecorded={
+              supabaseEnabled && sbSession?.user?.id
+                ? (gift, partnerId) => {
+                    void recordGiftEvent(sbSession.user.id, partnerId, {
+                      id: gift.id,
+                      name: gift.name,
+                      value: gift.value,
+                    });
+                  }
+                : undefined
+            }
           />
         ) : null;
       case View.VIDEO_CALL:
@@ -611,17 +1145,26 @@ const App: React.FC = () => {
         );
       }
       case View.TOKEN_SHOP:
-        return <TokenShopView onBack={() => setView(View.EXPLORE)} currentTokens={state.tokens!} onPurchase={addTokens} />;
+        return (
+          <TokenShopView
+            onBack={() => setView(View.EXPLORE)}
+            currentTokens={state.tokens!}
+            onPurchase={addTokens}
+            purchasePending={purchasePending}
+            purchaseNotice={purchaseNotice}
+          />
+        );
       case View.PROFILE:
         return (
-          <ProfileView 
-            user={state.currentUser} 
-            tokens={state.tokens} 
-            onGoShop={() => setView(View.TOKEN_SHOP)} 
+          <ProfileView
+            user={state.currentUser}
+            tokens={state.tokens}
+            onGoShop={() => setView(View.TOKEN_SHOP)}
             onUpdateAlbum={handleUpdateAlbum}
             onUpdateProfile={handleUpdateProfile}
             onPurchaseBadge={handlePurchaseBadge}
-            onLogout={() => { clearAppSession(); setAppSessionState(null); }}
+            cloudAccountActive={supabaseEnabled}
+            onLogout={() => void handleAppLogout()}
             onNavigateToExploreFilters={() => {
               setExploreFilterSignal((n) => n + 1);
               setView(View.EXPLORE);
@@ -632,6 +1175,7 @@ const App: React.FC = () => {
             }}
             onSubmitUserAd={handleSubmitUserAd}
             userAdSubmissions={userAdSubmissions}
+            onUnblockUser={handleUnblockUser}
           />
         );
       case View.USER_DETAIL:
@@ -647,11 +1191,19 @@ const App: React.FC = () => {
             onFollowToggle={() => toggleFollow(state.selectedUserForDetail!.id)}
             onFollowUser={ensureFollowing}
             onSuperLikeSuccess={(recipient) => {
-              addSuperLikeNotification(recipient.id, {
-                id: state.currentUser.id,
-                name: state.currentUser.name,
-                avatar: state.currentUser.avatar,
-              });
+              if (supabaseEnabled && sbSession?.user?.id) {
+                void insertSuperLikeNotificationDb(recipient.id, {
+                  id: state.currentUser.id,
+                  name: state.currentUser.name,
+                  avatar: state.currentUser.avatar,
+                });
+              } else {
+                addSuperLikeNotification(recipient.id, {
+                  id: state.currentUser.id,
+                  name: state.currentUser.name,
+                  avatar: state.currentUser.avatar,
+                });
+              }
             }}
             onReport={() => {
               window.alert("Thanks — we'll review your report.");
@@ -659,6 +1211,9 @@ const App: React.FC = () => {
             onBlock={() => {
               const id = state.selectedUserForDetail?.id;
               if (id) {
+                if (supabaseEnabled && sbSession?.user?.id) {
+                  void addBlock(sbSession.user.id, id);
+                }
                 addBlockedUserId(id);
                 setBlockedUserIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
               }
@@ -684,12 +1239,20 @@ const App: React.FC = () => {
       default:
         return (
           <DiscoverView
-            userGender={appSession.gender}
+            userGender={exploreGender}
+            currentUserId={state.currentUser.id}
             onSelectUser={openUserDetail}
             onSelectLive={openLive}
             onGoLive={() => setView(View.HOST_LIVE)}
             exploreFilterOpenSignal={exploreFilterSignal}
             blockedUserIds={blockedUserIds}
+            useRemoteHumanProfiles={supabaseEnabled}
+            cloudHumanUsers={cloudDiscoverUsers}
+            cloudDiscoverLoading={cloudDiscoverLoading}
+            cloudDiscoverError={cloudDiscoverError}
+            onReloadCloudDiscover={() => void loadCloudData()}
+            cloudCarouselAds={cloudCarouselAds}
+            useRemoteCarousel={supabaseEnabled}
           />
         );
     }

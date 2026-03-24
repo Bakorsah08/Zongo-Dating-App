@@ -5,13 +5,21 @@ import BackButton from './BackButton';
 
 interface TokenShopViewProps {
   currentTokens: number;
-  onPurchase: (tokens: number, packagePriceUsd?: number) => void;
+  onPurchase: (tokens: number, packagePriceUsd?: number) => Promise<void> | void;
   onBack: () => void;
+  purchasePending?: boolean;
+  purchaseNotice?: string | null;
 }
 
 const parsePriceUsd = (price: string): number => parseFloat(price.replace(/[^0-9.]/g, '')) || 0;
 
-const TokenShopView: React.FC<TokenShopViewProps> = ({ currentTokens, onPurchase, onBack }) => {
+const TokenShopView: React.FC<TokenShopViewProps> = ({
+  currentTokens,
+  onPurchase,
+  onBack,
+  purchasePending = false,
+  purchaseNotice,
+}) => {
   return (
     <div className="min-h-full bg-white p-6 pb-28 text-zinc-900">
       <div className="mb-8 flex items-center justify-between">
@@ -29,11 +37,17 @@ const TokenShopView: React.FC<TokenShopViewProps> = ({ currentTokens, onPurchase
 
       <div className="space-y-4">
         <h3 className="px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Top Up Packages</h3>
+        {purchaseNotice ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+            {purchaseNotice}
+          </div>
+        ) : null}
         {getTokenPackages().map((pkg) => (
           <button
             key={pkg.id}
             type="button"
             onClick={() => onPurchase(pkg.tokens, parsePriceUsd(pkg.price))}
+            disabled={purchasePending}
             className="group flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-all hover:border-pink-200 hover:bg-pink-50/40 active:scale-[0.98]"
           >
             <div className="flex items-center gap-4">
@@ -46,7 +60,7 @@ const TokenShopView: React.FC<TokenShopViewProps> = ({ currentTokens, onPurchase
               </div>
             </div>
             <div className="rounded-xl bg-pink-600 px-4 py-2 text-sm font-bold text-white shadow-sm group-hover:bg-pink-500">
-              {pkg.price}
+              {purchasePending ? 'Processing…' : pkg.price}
             </div>
           </button>
         ))}

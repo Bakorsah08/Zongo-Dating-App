@@ -1,4 +1,4 @@
-export type Role = 'super_admin' | 'admin' | 'moderator';
+export type Role = 'super_admin' | 'support' | 'moderator';
 
 export type Permission =
   | 'manage_users'
@@ -25,7 +25,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'manage_explore_ads',
     'send_app_notifications',
   ],
-  admin: [
+  support: [
     'view_dashboard',
     'manage_users',
     'manage_badges',

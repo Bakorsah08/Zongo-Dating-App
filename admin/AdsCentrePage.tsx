@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ExploreCarouselAd, UserAdSubmission } from '../types';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
 import {
   adminStore,
   DEFAULT_NEW_EXPLORE_AD,
@@ -7,6 +8,7 @@ import {
   computeUserAdLiveToggle,
   ADMIN_DATA_CHANGED_EVENT,
 } from './store';
+import { listPendingAdSubmissions, reviewAdSubmission } from '../services/supabaseAdModeration';
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 /** Prefix so pending picks never collide with carousel UUIDs */
@@ -33,22 +35,35 @@ const AdsCentrePage: React.FC = () => {
   const syncFromStore = useCallback((preferCarouselId?: string | null) => {
     adminStore.hydrateFromLocalStorage();
     const list = adminStore.getExploreCarousel().ads;
+    const applyState = (pending: UserAdSubmission[]) => {
+      setAds(list);
+      setPendingSubs(pending);
+      setSelectedKey((prev) => {
+        if (preferCarouselId && list.some((a) => a.id === preferCarouselId)) {
+          return preferCarouselId;
+        }
+        if (prev?.startsWith(PENDING_PREFIX)) {
+          const sid = prev.slice(PENDING_PREFIX.length);
+          if (pending.some((s) => s.id === sid)) return prev;
+        } else if (prev && list.some((a) => a.id === prev)) {
+          return prev;
+        }
+        if (pending.length) return `${PENDING_PREFIX}${pending[0].id}`;
+        return list[0]?.id ?? null;
+      });
+    };
+
+    if (isSupabaseConfigured()) {
+      void listPendingAdSubmissions()
+        .then((rows) => applyState(rows))
+        .catch((err) => {
+          console.error('listPendingAdSubmissions', err);
+          applyState([]);
+        });
+      return;
+    }
     const pending = adminStore.getUserAdSubmissions().filter((s) => s.status === 'pending');
-    setAds(list);
-    setPendingSubs(pending);
-    setSelectedKey((prev) => {
-      if (preferCarouselId && list.some((a) => a.id === preferCarouselId)) {
-        return preferCarouselId;
-      }
-      if (prev?.startsWith(PENDING_PREFIX)) {
-        const sid = prev.slice(PENDING_PREFIX.length);
-        if (pending.some((s) => s.id === sid)) return prev;
-      } else if (prev && list.some((a) => a.id === prev)) {
-        return prev;
-      }
-      if (pending.length) return `${PENDING_PREFIX}${pending[0].id}`;
-      return list[0]?.id ?? null;
-    });
+    applyState(pending);
   }, []);
 
   useEffect(() => {
@@ -221,6 +236,16 @@ const AdsCentrePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    if (isSupabaseConfigured()) {
+                      void reviewAdSubmission(selectedPending.id, 'approve').then((res) => {
+                        if (!res.ok) {
+                          window.alert(res.error);
+                          return;
+                        }
+                        syncFromStore();
+                      });
+                      return;
+                    }
                     const slideId = adminStore.approveUserAdSubmission(selectedPending.id);
                     syncFromStore(slideId);
                   }}
@@ -231,6 +256,16 @@ const AdsCentrePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    if (isSupabaseConfigured()) {
+                      void reviewAdSubmission(selectedPending.id, 'reject').then((res) => {
+                        if (!res.ok) {
+                          window.alert(res.error);
+                          return;
+                        }
+                        syncFromStore();
+                      });
+                      return;
+                    }
                     if (adminStore.rejectUserAdSubmission(selectedPending.id)) syncFromStore();
                   }}
                   className="px-5 py-2.5 rounded-xl border border-red-500/60 text-red-400 text-sm font-bold hover:bg-red-500/10"

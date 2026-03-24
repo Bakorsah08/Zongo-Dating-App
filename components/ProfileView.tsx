@@ -12,6 +12,8 @@ interface ProfileViewProps {
   onUpdateProfile: (updates: Partial<User>) => void;
   onPurchaseBadge?: (tier: BadgeTier) => boolean;
   onLogout?: () => void;
+  /** When true, show that profile fields are backed by a server account (Supabase). */
+  cloudAccountActive?: boolean;
   /** Opens Explore with the filter sheet (Discovery preferences). */
   onNavigateToExploreFilters?: () => void;
   /** Called after notification or privacy prefs change so the app can refresh derived UI. */
@@ -27,8 +29,9 @@ interface ProfileViewProps {
     backgroundColor: string;
     linkUrl: string;
     displayDurationSec: number;
-  }) => { success: boolean; error?: string };
+  }) => { success: boolean; error?: string } | Promise<{ success: boolean; error?: string }>;
   userAdSubmissions?: UserAdSubmission[];
+  onUnblockUser?: (userId: string) => void;
 }
 
 const MAX_PHOTOS = 8;
@@ -45,10 +48,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onUpdateProfile,
   onPurchaseBadge,
   onLogout,
+  cloudAccountActive = false,
   onNavigateToExploreFilters,
   onPreferencesChanged,
   onSubmitUserAd,
   userAdSubmissions = [],
+  onUnblockUser,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -254,25 +259,27 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const submitUserAd = () => {
+  const submitUserAd = async () => {
     if (!onSubmitUserAd) return;
     if (!selectedAdTier) {
       setAdSubmitMsg('Select a campaign length.');
       return;
     }
     setAdSubmitMsg(null);
-    const r = onSubmitUserAd({
-      tierId: selectedAdTierId,
-      durationDays: selectedAdTier.durationDays,
-      title: adTitle,
-      subtitle: adSubtitle,
-      badgeLabel: adBadge,
-      imageUrl: adImageUrl,
-      imageDataUrl: adImageDataUrl,
-      backgroundColor: adBgColor,
-      linkUrl: adLink,
-      displayDurationSec: adSlideSec,
-    });
+    const r = await Promise.resolve(
+      onSubmitUserAd({
+        tierId: selectedAdTierId,
+        durationDays: selectedAdTier.durationDays,
+        title: adTitle,
+        subtitle: adSubtitle,
+        badgeLabel: adBadge,
+        imageUrl: adImageUrl,
+        imageDataUrl: adImageDataUrl,
+        backgroundColor: adBgColor,
+        linkUrl: adLink,
+        displayDurationSec: adSlideSec,
+      })
+    );
     if (r.success) {
       setAdSubmitMsg('Submitted for review. You will be notified when it is approved or rejected.');
       resetUserAdForm();
@@ -308,6 +315,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                 </button>
               </div>
               <p className="text-sm text-zinc-500">📍 {user.location}</p>
+              {cloudAccountActive && (
+                <p className="mt-1 text-xs font-medium text-emerald-600/90">Profile saved to your account</p>
+              )}
             </>
           ) : (
             <div className="w-full max-w-xs space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -1035,6 +1045,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           onClose={() => setSettingsSheet(null)}
           onNavigateToExploreFilters={() => onNavigateToExploreFilters?.()}
           onPreferencesChanged={() => onPreferencesChanged?.()}
+          onUnblockUser={onUnblockUser}
         />
       ) : null}
     </div>

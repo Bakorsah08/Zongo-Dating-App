@@ -33,7 +33,8 @@ const STORAGE_KEY = 'zongo_user_preferences_v1';
 
 export const USER_PREFERENCES_UPDATED_EVENT = 'zongo-user-preferences-updated';
 
-const DEFAULTS: UserPreferences = {
+/** Exported for server merge defaults (same as local defaults). */
+export const USER_PREFERENCES_DEFAULTS: UserPreferences = {
   discovery: {
     activeTextFilter: 'all',
     profileType: 'human',
@@ -60,7 +61,10 @@ function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
-function mergePrefs(base: UserPreferences, patch: Partial<UserPreferences>): UserPreferences {
+export function mergeUserPreferences(
+  base: UserPreferences,
+  patch: Partial<UserPreferences>
+): UserPreferences {
   const d = { ...base.discovery, ...patch.discovery };
   const n = { ...base.notifications, ...patch.notifications };
   const blocked =
@@ -78,12 +82,12 @@ function mergePrefs(base: UserPreferences, patch: Partial<UserPreferences>): Use
 function load(): UserPreferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return clone(DEFAULTS);
+    if (!raw) return clone(USER_PREFERENCES_DEFAULTS);
     const parsed = JSON.parse(raw) as Partial<UserPreferences>;
-    if (!parsed || typeof parsed !== 'object') return clone(DEFAULTS);
-    return mergePrefs(clone(DEFAULTS), parsed);
+    if (!parsed || typeof parsed !== 'object') return clone(USER_PREFERENCES_DEFAULTS);
+    return mergeUserPreferences(clone(USER_PREFERENCES_DEFAULTS), parsed);
   } catch {
-    return clone(DEFAULTS);
+    return clone(USER_PREFERENCES_DEFAULTS);
   }
 }
 
@@ -97,15 +101,44 @@ function save(p: UserPreferences) {
 
 let cache: UserPreferences | null = null;
 
+let prefsCloudDebounce: ReturnType<typeof setTimeout> | null = null;
+let prefsCloudWriter: ((p: UserPreferences) => void | Promise<void>) | null = null;
+
+export function registerPreferencesCloudWriter(
+  writer: ((p: UserPreferences) => void | Promise<void>) | null
+): void {
+  prefsCloudWriter = writer;
+}
+
+function schedulePreferencesCloudPush(): void {
+  if (!prefsCloudWriter || !cache) return;
+  if (prefsCloudDebounce) clearTimeout(prefsCloudDebounce);
+  prefsCloudDebounce = setTimeout(() => {
+    prefsCloudDebounce = null;
+    void prefsCloudWriter!(getUserPreferences());
+  }, 450);
+}
+
 export function getUserPreferences(): UserPreferences {
   if (!cache) cache = load();
   return cache;
 }
 
-export function updateUserPreferences(patch: Partial<UserPreferences>): void {
-  cache = mergePrefs(getUserPreferences(), patch);
+/** Replace cache (e.g. after loading from API). Does not push to cloud. */
+export function replaceUserPreferencesCache(next: UserPreferences): void {
+  cache = clone(next);
   save(cache);
   window.dispatchEvent(new Event(USER_PREFERENCES_UPDATED_EVENT));
+}
+
+export function updateUserPreferences(
+  patch: Partial<UserPreferences>,
+  options?: { skipCloudPush?: boolean }
+): void {
+  cache = mergeUserPreferences(getUserPreferences(), patch);
+  save(cache);
+  window.dispatchEvent(new Event(USER_PREFERENCES_UPDATED_EVENT));
+  if (!options?.skipCloudPush) schedulePreferencesCloudPush();
 }
 
 export function getDiscoveryPreferences(): DiscoveryPreferences {

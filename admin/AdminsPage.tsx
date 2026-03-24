@@ -1,18 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import type { AdminUser, Role } from '../auth/types';
-import { authStore } from '../auth/store';
 import { useAuthContext } from '../auth/AuthContext';
+import { createAdmin, deleteAdmin, listAdmins, updateAdminRole } from '../services/supabaseAdmin';
 
-const ROLES: Role[] = ['super_admin', 'admin', 'moderator'];
+const ROLES: Role[] = ['super_admin', 'support', 'moderator'];
 
 const AdminsPage: React.FC = () => {
   const { hasPermission } = useAuthContext();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [loading, setLoading] = useState(false);
   const canManage = hasPermission('manage_admins');
 
   useEffect(() => {
-    setAdmins(authStore.getAdmins());
+    let mounted = true;
+    setLoading(true);
+    void listAdmins()
+      .then((rows) => {
+        if (mounted) setAdmins(rows);
+      })
+      .catch((e) => {
+        console.error('listAdmins', e);
+        if (mounted) alert('Failed to load admin users.');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!canManage) {
@@ -24,21 +40,42 @@ const AdminsPage: React.FC = () => {
     );
   }
 
-  const handleAdd = (admin: Omit<AdminUser, 'id' | 'createdAt'>) => {
-    authStore.addAdmin(admin);
-    setAdmins(authStore.getAdmins());
+  const refreshAdmins = async () => {
+    setAdmins(await listAdmins());
+  };
+
+  const handleAdd = async (admin: {
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+  }) => {
+    const res = await createAdmin(admin);
+    if (!res.ok) {
+      alert(res.error);
+      return;
+    }
+    await refreshAdmins();
     setShowAdd(false);
   };
 
-  const handleUpdateRole = (id: string, role: Role) => {
-    authStore.updateAdmin(id, { role });
-    setAdmins(authStore.getAdmins());
+  const handleUpdateRole = async (id: string, role: Role) => {
+    const res = await updateAdminRole(id, role);
+    if (!res.ok) {
+      alert(res.error);
+      return;
+    }
+    await refreshAdmins();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Remove this admin? They will no longer be able to log in.')) {
-      authStore.deleteAdmin(id);
-      setAdmins(authStore.getAdmins());
+      const res = await deleteAdmin(id);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      await refreshAdmins();
     }
   };
 
@@ -68,7 +105,7 @@ const AdminsPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {admins.map((admin) => (
+            {!loading && admins.map((admin) => (
               <tr key={admin.id} className="border-b border-zinc-200 dark:border-zinc-800/50">
                 <td className="p-4 font-medium">{admin.name}</td>
                 <td className="p-4 text-zinc-600 dark:text-zinc-400">{admin.email}</td>
@@ -97,6 +134,20 @@ const AdminsPage: React.FC = () => {
                 </td>
               </tr>
             ))}
+            {!loading && admins.length === 0 && (
+              <tr>
+                <td className="p-4 text-zinc-500" colSpan={4}>
+                  No admin users found.
+                </td>
+              </tr>
+            )}
+            {loading && (
+              <tr>
+                <td className="p-4 text-zinc-500" colSpan={4}>
+                  Loading admin users...
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -109,22 +160,21 @@ const AdminsPage: React.FC = () => {
 };
 
 const AddAdminModal: React.FC<{
-  onAdd: (admin: Omit<AdminUser, 'id' | 'createdAt'>) => void;
+  onAdd: (admin: { name: string; email: string; password: string; role: Role }) => void;
   onClose: () => void;
 }> = ({ onAdd, onClose }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<Role>('admin');
+  const [role, setRole] = useState<Role>('support');
 
   const handleSubmit = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       alert('All fields required');
       return;
     }
-    const admin = { name: name.trim(), email: email.trim().toLowerCase(), role };
+    const admin = { name: name.trim(), email: email.trim().toLowerCase(), role, password };
     onAdd(admin);
-    await authStore.setPassword(admin.email, password);
   };
 
   return (
@@ -168,7 +218,7 @@ const AddAdminModal: React.FC<{
               onChange={(e) => setRole(e.target.value as Role)}
               className="w-full px-4 py-2 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white"
             >
-              <option value="admin">Admin</option>
+              <option value="support">Support</option>
               <option value="moderator">Moderator</option>
             </select>
           </div>

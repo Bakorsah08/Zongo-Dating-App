@@ -15,6 +15,8 @@ interface ProfileSettingsSheetsProps {
   onClose: () => void;
   onNavigateToExploreFilters: () => void;
   onPreferencesChanged: () => void;
+  /** Unblock on server (e.g. Supabase `user_blocks`) when provided. */
+  onUnblockUser?: (userId: string) => void;
 }
 
 const toggleRowClass =
@@ -25,6 +27,7 @@ const ProfileSettingsSheets: React.FC<ProfileSettingsSheetsProps> = ({
   onClose,
   onNavigateToExploreFilters,
   onPreferencesChanged,
+  onUnblockUser,
 }) => {
   const [superLike, setSuperLike] = useState(true);
   const [system, setSystem] = useState(true);
@@ -55,6 +58,7 @@ const ProfileSettingsSheets: React.FC<ProfileSettingsSheetsProps> = ({
   };
 
   const handleUnblock = (userId: string) => {
+    onUnblockUser?.(userId);
     removeBlockedUserId(userId);
     setBlockedIds((prev) => prev.filter((id) => id !== userId));
     onPreferencesChanged();

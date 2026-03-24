@@ -90,7 +90,7 @@ const LoginPage: React.FC = () => {
         </form>
 
         <p className="text-center text-zinc-600 text-xs mt-6">
-          Default: admin@zongo.com / admin123
+          Use a Supabase Auth user that has a row in <code>admin_roles</code>.
         </p>
         <div className="flex justify-center mt-6">
           <Link

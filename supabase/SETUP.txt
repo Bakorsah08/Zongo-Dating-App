@@ -1,0 +1,81 @@
+Supabase setup (production auth + profiles)
+==========================================
+
+1. Create a project at https://supabase.com
+
+2. Project Settings → API: copy Project URL and anon (public) key.
+
+3. In the project root, copy .env.example to .env.local and set:
+   VITE_SUPABASE_URL
+   VITE_SUPABASE_ANON_KEY
+
+4. SQL → New query → run migrations in order (same order as in supabase/migrations/):
+   - 20250323120000_profiles.sql
+   - 20250324120000_zongo_domain_schema.sql
+   - 20250324140000_storage_realtime.sql (chat media bucket + Realtime on app_notifications)
+   - 20250325150000_wallet_rpc_rls.sql (wallet RPCs; removes direct client UPDATE on user_account)
+   - 20260324170000_admin_wallet_hardening.sql (admin roles, wallet ledger, cashout queue, secure RPCs)
+   - 20260324173000_payment_webhook_idempotency.sql (payment webhook idempotency table)
+   Or use Supabase CLI: supabase db push
+
+   After the domain migration, public.profiles no longer stores email (use Supabase Auth only).
+
+5. Authentication → URL configuration:
+   - Site URL: http://localhost:3000 (this app uses Vite on port 3000 — see vite.config.ts).
+   - Redirect URLs: add exactly what you use after OAuth, e.g.:
+     http://localhost:3000
+     http://localhost:3000/
+     (Add your production origin the same way when you deploy.)
+
+6. Authentication → Providers → Email:
+   - Enable Email (password sign-up / sign-in).
+
+7. Authentication → Providers → Google (OAuth):
+   a) Google Cloud Console (https://console.cloud.google.com):
+      - Create or select a project.
+      - APIs & Services → OAuth consent screen: choose External (or Internal for Workspace),
+        add app name, support email, developer contact; add scopes openid, email, profile if prompted.
+      - APIs & Services → Credentials → Create credentials → OAuth client ID.
+      - Application type: Web application.
+      - Authorized JavaScript origins: http://localhost:3000 (and your production URL).
+      - Authorized redirect URIs: copy the “Callback URL (for OAuth)” from the Supabase Google
+        provider panel (looks like https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback).
+        Paste it here — it must match exactly.
+   b) Supabase Dashboard → Authentication → Providers → Google:
+      - Turn Google ON.
+      - Client ID: from Google Cloud (OAuth 2.0 Client ID).
+      - Client Secret: from Google Cloud.
+      - Save.
+
+   The app already calls signInWithOAuth({ provider: 'google' }) and redirects back to your
+   site root; no extra env vars are required beyond VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+
+8. For local testing without email confirmation delays:
+   Authentication → Providers → Email → disable "Confirm email" (re-enable before real production).
+
+9. npm run dev — sign up, pick gender, open Profile: data loads from public.profiles with RLS.
+
+10. Deploy trusted Edge Functions (required for production-sensitive flows):
+   - supabase/functions/payments-webhook
+   - supabase/functions/admin-review-cashout
+   - supabase/functions/admin-approve-ad
+   - supabase/functions/admin-manage-roles
+   - supabase/functions/wallet-action
+   Example:
+   supabase functions deploy payments-webhook
+   supabase functions deploy admin-review-cashout
+   supabase functions deploy admin-approve-ad
+   supabase functions deploy admin-manage-roles
+   supabase functions deploy wallet-action
+
+11. Configure function secrets in Supabase:
+   - SUPABASE_URL
+   - SUPABASE_ANON_KEY
+   - SUPABASE_SERVICE_ROLE_KEY
+   - PAYMENT_WEBHOOK_SECRET (for webhook signature verification)
+
+12. Production safety gate:
+   - In production, this app now blocks local mock auth fallback when Supabase is not configured.
+   - Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are present in your production environment.
+
+If the migration errors on "execute procedure", try replacing it with "execute function" for your Postgres version.

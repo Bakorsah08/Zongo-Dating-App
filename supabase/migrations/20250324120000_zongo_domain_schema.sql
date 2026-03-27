@@ -1,5 +1,6 @@
 -- Zongo domain schema: social graph, chat, notifications, preferences, ads, economy.
 -- Apply after 20250323120000_profiles.sql (run full chain in SQL editor or `supabase db push`).
+-- Rollback: manual rollback only; reverse in dependency order (drop triggers/functions/policies, then domain tables) and restore any prior profile/email assumptions if needed.
 
 -- ---------------------------------------------------------------------------
 -- 1. Extend public profiles (discover + AI flags). Email lives in auth.users only.

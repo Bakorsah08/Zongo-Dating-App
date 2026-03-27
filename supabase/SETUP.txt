@@ -21,6 +21,14 @@ Supabase setup (production auth + profiles)
    - npx supabase login   (first time only)
    - npm run supabase:migrate
 
+   Migration authoring checklist (required):
+   - Name files as: YYYYMMDDHHmmss_description.sql (lowercase snake_case description).
+   - Keep timestamps strictly increasing so migration order is deterministic.
+   - Add rollback guidance in every migration using:
+     -- Rollback: <manual revert steps>
+   - Validate before commit:
+     npm run validate:migrations
+
    After the domain migration, public.profiles no longer stores email (use Supabase Auth only).
 
 5. Authentication → URL configuration:

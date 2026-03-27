@@ -1,5 +1,6 @@
 -- Centralized audit logging for admin actions, wallet movements, ad decisions,
 -- and payout actions.
+-- Rollback: restore previous wallet_apply_delta/request_cashout bodies, remove audit_log_event integration, then drop table public.audit_logs and related grants/indexes if no longer required.
 
 create table if not exists public.audit_logs (
   id bigserial primary key,

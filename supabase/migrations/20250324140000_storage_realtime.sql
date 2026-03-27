@@ -1,4 +1,5 @@
 -- Public chat media bucket + RLS. Realtime for in-app notifications.
+-- Rollback: drop chat_media_* policies; optionally delete storage bucket chat-media if unused; remove public.app_notifications from publication supabase_realtime.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (

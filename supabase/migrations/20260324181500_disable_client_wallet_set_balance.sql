@@ -3,6 +3,7 @@
 -- - payments-webhook (purchase credits)
 -- - admin-reviewed workflows
 -- - wallet-action/service-role mediated deltas
+-- Rollback: restore execute grants on public.wallet_set_token_balance(integer) and replace the disabled function body with the prior implementation if required.
 
 revoke all on function public.wallet_set_token_balance(integer) from public;
 revoke all on function public.wallet_set_token_balance(integer) from authenticated;

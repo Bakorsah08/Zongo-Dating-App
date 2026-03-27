@@ -1,5 +1,6 @@
 -- Run this in Supabase SQL Editor, or via supabase db push if you use the Supabase CLI.
 -- Creates app profiles (1:1 with auth.users) and RLS policies.
+-- Rollback: drop trigger on_auth_user_created; drop function handle_new_user and set_profiles_updated_at; drop policies on public.profiles; drop table public.profiles.
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,

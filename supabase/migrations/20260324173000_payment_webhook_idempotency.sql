@@ -1,5 +1,6 @@
 -- Idempotency store for external payment webhooks.
 -- Ensures each provider event is processed once.
+-- Rollback: drop policy payment_webhook_events_no_client_access, disable RLS on table if desired, then drop table public.payment_webhook_events.
 
 create table if not exists public.payment_webhook_events (
   provider_event_id text primary key,

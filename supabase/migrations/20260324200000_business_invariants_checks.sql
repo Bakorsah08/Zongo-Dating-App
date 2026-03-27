@@ -1,5 +1,6 @@
 -- Business invariants: moderation/review fields, ad & cashout state machines,
 -- carousel source consistency, wallet ledger signs, URL/text bounds.
+-- Rollback: drop transition triggers/functions and the added *_ck constraints from this migration, then reintroduce previous constraints/policies that match your older state model.
 
 -- ---------------------------------------------------------------------------
 -- 1) Ad submissions: moderation fields + sensible bounds

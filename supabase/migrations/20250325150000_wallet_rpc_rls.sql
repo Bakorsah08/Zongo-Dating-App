@@ -1,5 +1,6 @@
 -- Wallet: remove arbitrary client UPDATE on user_account; use RPCs (auth.uid() only).
 -- Apply after 20250324120000_zongo_domain_schema.sql.
+-- Rollback: restore prior user_account update policy and remove wallet_* RPCs introduced here if reverting to client-driven wallet updates.
 
 drop policy if exists "user_account_update_own" on public.user_account;
 

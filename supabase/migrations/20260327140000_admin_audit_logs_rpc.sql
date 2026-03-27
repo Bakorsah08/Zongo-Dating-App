@@ -1,5 +1,6 @@
 -- Admin-facing filtered read API for audit logs.
 -- Supports actor/target/date/action-prefix filtering with pagination.
+-- Rollback: drop function public.admin_list_audit_logs(...) and revoke any grants introduced for this RPC.
 
 create or replace function public.admin_list_audit_logs(
   p_action_prefix text default null,

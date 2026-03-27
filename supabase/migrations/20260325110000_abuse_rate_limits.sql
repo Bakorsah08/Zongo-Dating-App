@@ -1,5 +1,6 @@
 -- Abuse controls: throttle high-frequency writes and social churn.
 -- Enforced in Postgres triggers so limits apply to all clients.
+-- Rollback: drop abuse/rate-limit triggers and enforcement functions; optionally drop table public.abuse_action_log and related policies/indexes.
 
 -- ---------------------------------------------------------------------------
 -- 1) Social churn action log (follow/block insert+delete)

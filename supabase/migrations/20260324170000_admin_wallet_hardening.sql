@@ -1,6 +1,7 @@
 -- Admin + wallet hardening baseline for production.
 -- Adds admin roles, immutable wallet ledger, cashout request queue,
 -- and secure SQL functions for trusted server-side actions.
+-- Rollback: drop request_cashout/wallet_apply_delta/is_admin functions and policies from this migration, then drop cashout_requests, wallet_ledger, and admin_roles tables if no longer needed.
 
 -- ---------------------------------------------------------------------------
 -- 1) Admin roles

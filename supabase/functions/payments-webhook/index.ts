@@ -89,6 +89,8 @@ Deno.serve(async (req) => {
       p_reference_id: paymentRef,
       p_meta: {
         source: 'payments-webhook',
+        actor_label: 'payments-webhook',
+        reason: 'payment_confirmed',
         provider_event_id: providerEventId,
       },
     });

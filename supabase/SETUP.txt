@@ -16,6 +16,7 @@ Supabase setup (production auth + profiles)
    - 20250325150000_wallet_rpc_rls.sql (wallet RPCs; removes direct client UPDATE on user_account)
    - 20260324170000_admin_wallet_hardening.sql (admin roles, wallet ledger, cashout queue, secure RPCs)
    - 20260324173000_payment_webhook_idempotency.sql (payment webhook idempotency table)
+   - 20260325110000_abuse_rate_limits.sql (rate limiting for messages/notifications/follows/blocks/gifts)
    Or use Supabase CLI:
    - npx supabase login   (first time only)
    - npm run supabase:migrate
@@ -63,12 +64,14 @@ Supabase setup (production auth + profiles)
    - supabase/functions/admin-approve-ad
    - supabase/functions/admin-manage-roles
    - supabase/functions/wallet-action
+   JWT at the gateway: see supabase/config.toml (user-facing functions verify JWT;
+   payments-webhook uses verify_jwt = false for provider callbacks).
    Example:
-   supabase functions deploy payments-webhook
-   supabase functions deploy admin-review-cashout
-   supabase functions deploy admin-approve-ad
-   supabase functions deploy admin-manage-roles
-   supabase functions deploy wallet-action
+   npx supabase functions deploy payments-webhook
+   npx supabase functions deploy admin-review-cashout
+   npx supabase functions deploy admin-approve-ad
+   npx supabase functions deploy admin-manage-roles
+   npx supabase functions deploy wallet-action
 
 11. Configure function secrets in Supabase:
    - SUPABASE_URL

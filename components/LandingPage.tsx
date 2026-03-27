@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 export type LandingAuthMode = 'signIn' | 'signUp';
 
@@ -20,6 +20,57 @@ const CAROUSEL_IMAGES = [
 ];
 
 const CAROUSEL_INTERVAL_MS = 4500;
+const SIGNUP_ATTEMPT_KEY = 'zongo_signup_attempts_v1';
+
+function envBool(value: string | undefined, fallback: boolean): boolean {
+  if (!value) return fallback;
+  const v = value.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+function envNumber(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed;
+}
+
+function readSignupAttemptsMs(nowMs: number, windowMs: number): number[] {
+  try {
+    const raw = localStorage.getItem(SIGNUP_ATTEMPT_KEY);
+    const parsed = raw ? (JSON.parse(raw) as number[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    const filtered = parsed.filter((ts) => Number.isFinite(ts) && nowMs - Number(ts) <= windowMs);
+    if (filtered.length !== parsed.length) {
+      localStorage.setItem(SIGNUP_ATTEMPT_KEY, JSON.stringify(filtered));
+    }
+    return filtered;
+  } catch {
+    return [];
+  }
+}
+
+function pushSignupAttempt(nowMs: number, windowMs: number) {
+  const existing = readSignupAttemptsMs(nowMs, windowMs);
+  existing.push(nowMs);
+  try {
+    localStorage.setItem(SIGNUP_ATTEMPT_KEY, JSON.stringify(existing.slice(-50)));
+  } catch {
+    // Ignore storage write issues in private mode.
+  }
+}
+
+function isDisposableDomain(email: string): boolean {
+  const domain = (email.split('@')[1] ?? '').trim().toLowerCase();
+  if (!domain) return false;
+  return (
+    domain.endsWith('mailinator.com') ||
+    domain.endsWith('10minutemail.com') ||
+    domain.endsWith('guerrillamail.com') ||
+    domain.endsWith('tempmail.com') ||
+    domain.endsWith('trashmail.com')
+  );
+}
 
 const LandingPage: React.FC<LandingPageProps> = ({ onEmailAuth, onGoogleAuth }) => {
   const [email, setEmail] = useState('');
@@ -30,6 +81,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEmailAuth, onGoogleAuth }) 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [authMode, setAuthMode] = useState<LandingAuthMode>('signIn');
   const [busy, setBusy] = useState(false);
+  const [challengeQuestion, setChallengeQuestion] = useState('');
+  const [challengeAnswer, setChallengeAnswer] = useState('');
+  const [challengeExpected, setChallengeExpected] = useState('');
+
+  const signupChallengeEnabled = envBool(import.meta.env.VITE_SIGNUP_CHALLENGE_ENABLED, true);
+  const signupChallengeAlways = envBool(import.meta.env.VITE_SIGNUP_CHALLENGE_ALWAYS, false);
+  const signupRiskThreshold = Math.max(1, Math.round(envNumber(import.meta.env.VITE_SIGNUP_RISK_ATTEMPTS_THRESHOLD, 3)));
+  const signupRiskWindowMin = Math.max(1, Math.round(envNumber(import.meta.env.VITE_SIGNUP_RISK_WINDOW_MINUTES, 10)));
+
+  const needsSignupChallenge = (() => {
+    if (!signupChallengeEnabled || authMode !== 'signUp') return false;
+    if (signupChallengeAlways) return true;
+    const now = Date.now();
+    const attempts = readSignupAttemptsMs(now, signupRiskWindowMin * 60_000);
+    if (attempts.length >= signupRiskThreshold) return true;
+    if (isDisposableDomain(email)) return true;
+    return false;
+  })();
+
+  const regenerateChallenge = useCallback(() => {
+    const left = Math.floor(Math.random() * 9) + 1;
+    const right = Math.floor(Math.random() * 9) + 1;
+    setChallengeQuestion(`${left} + ${right}`);
+    setChallengeExpected(String(left + right));
+    setChallengeAnswer('');
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -37,6 +114,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEmailAuth, onGoogleAuth }) 
     }, CAROUSEL_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (needsSignupChallenge) {
+      if (!challengeExpected) regenerateChallenge();
+      return;
+    }
+    setChallengeQuestion('');
+    setChallengeExpected('');
+    setChallengeAnswer('');
+  }, [needsSignupChallenge, challengeExpected, regenerateChallenge]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,8 +137,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEmailAuth, onGoogleAuth }) 
       setError('Password must be at least 6 characters');
       return;
     }
+    if (needsSignupChallenge) {
+      if (!challengeAnswer.trim()) {
+        setError('Please complete the signup challenge.');
+        return;
+      }
+      if (challengeAnswer.trim() !== challengeExpected) {
+        setError('Challenge answer is incorrect. Please try again.');
+        regenerateChallenge();
+        return;
+      }
+    }
     setBusy(true);
     try {
+      if (authMode === 'signUp') {
+        pushSignupAttempt(Date.now(), signupRiskWindowMin * 60_000);
+      }
       const result = await onEmailAuth(email.trim(), password, authMode);
       if (result?.error) setError(result.error);
       if (result?.info) setInfo(result.info);
@@ -202,6 +303,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEmailAuth, onGoogleAuth }) 
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-500 outline-none focus:border-pink-500 transition-colors"
                 />
               </div>
+              {needsSignupChallenge ? (
+                <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/70 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                      Security challenge: {challengeQuestion}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={regenerateChallenge}
+                      className="text-[11px] text-pink-400 hover:text-pink-300"
+                    >
+                      New
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={challengeAnswer}
+                    onChange={(e) => setChallengeAnswer(e.target.value.replace(/[^\d-]/g, '').slice(0, 6))}
+                    placeholder="Type your answer"
+                    autoComplete="off"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-500 outline-none focus:border-pink-500 transition-colors"
+                  />
+                  <p className="text-[11px] text-zinc-500">Shown when signup abuse risk is elevated.</p>
+                </div>
+              ) : null}
               {error && <p className="text-red-400 text-sm">{error}</p>}
               {info && <p className="text-emerald-400 text-sm">{info}</p>}
               <button

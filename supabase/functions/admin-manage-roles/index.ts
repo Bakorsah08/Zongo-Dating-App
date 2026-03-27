@@ -42,6 +42,29 @@ async function requesterRole(admin: ReturnType<typeof createClient>, userId: str
   return data.role;
 }
 
+async function writeAudit(
+  admin: ReturnType<typeof createClient>,
+  payload: {
+    action: string;
+    actorUserId: string;
+    targetUserId?: string | null;
+    reason?: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  const { error } = await admin.rpc('audit_log_event', {
+    p_action: payload.action,
+    p_actor_user_id: payload.actorUserId,
+    p_actor_label: 'admin',
+    p_target_user_id: payload.targetUserId ?? null,
+    p_reason: payload.reason ?? payload.action,
+    p_metadata: payload.metadata ?? {},
+  });
+  if (error) {
+    console.error('admin-manage-roles audit log failed', error);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(405, { ok: false, error: 'method_not_allowed' });
 
@@ -105,6 +128,16 @@ Deno.serve(async (req) => {
         role: body.role,
       });
       if (roleErr) return json(500, { ok: false, error: roleErr.message });
+      await writeAudit(admin, {
+        action: 'admin.role.created',
+        actorUserId: requesterId,
+        targetUserId: created.user.id,
+        reason: 'create_admin_user',
+        metadata: {
+          role: body.role,
+          email: body.email,
+        },
+      });
       return json(200, { ok: true, user_id: created.user.id });
     }
 
@@ -115,6 +148,15 @@ Deno.serve(async (req) => {
         role: body.role,
       });
       if (error) return json(500, { ok: false, error: error.message });
+      await writeAudit(admin, {
+        action: 'admin.role.updated',
+        actorUserId: requesterId,
+        targetUserId: body.user_id,
+        reason: 'update_admin_role',
+        metadata: {
+          role: body.role,
+        },
+      });
       return json(200, { ok: true });
     }
 
@@ -125,6 +167,12 @@ Deno.serve(async (req) => {
       if (roleErr) return json(500, { ok: false, error: roleErr.message });
       const { error: userErr } = await admin.auth.admin.deleteUser(body.user_id);
       if (userErr) return json(500, { ok: false, error: userErr.message });
+      await writeAudit(admin, {
+        action: 'admin.role.deleted',
+        actorUserId: requesterId,
+        targetUserId: body.user_id,
+        reason: 'delete_admin_user',
+      });
       return json(200, { ok: true });
     }
 

@@ -23,7 +23,7 @@ interface ChatRoomViewProps {
   onAudioCall: () => void;
   onViewProfile: () => void;
   deductTokens: (amount: number) => boolean;
-  /** Upload to Supabase Storage; required for persisted media in `cloudChat` threads. */
+  /** Upload to Supabase Storage; returns object path for persisted media in `cloudChat` threads. */
   uploadChatMedia?: (blob: Blob, mimeType?: string) => Promise<string | null>;
   /** Persist gift to `gift_events` after tokens are deducted. */
   onGiftRecorded?: (gift: Gift, partnerId: string) => void;
@@ -202,10 +202,10 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
         if (blob.size < 64) return;
         void (async () => {
           if (cloudChat && uploadChatMedia) {
-            const publicUrl = await uploadChatMedia(blob, blob.type || 'audio/webm');
-            if (publicUrl) {
+            const mediaPath = await uploadChatMedia(blob, blob.type || 'audio/webm');
+            if (mediaPath) {
               const sent = await sendMessage(cloudChat.conversationId, selfUserId, {
-                audio_url: publicUrl,
+                audio_url: mediaPath,
               });
               if (sent) {
                 setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
@@ -386,16 +386,16 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
 
     void (async () => {
       if (cloudChat && uploadChatMedia) {
-        const publicUrl = await uploadChatMedia(file, file.type);
-        if (!publicUrl) {
+        const mediaPath = await uploadChatMedia(file, file.type);
+        if (!mediaPath) {
           window.alert('Could not upload this file. Try a smaller image or video.');
           return;
         }
         const payload =
           file.type.startsWith('image/')
-            ? { image_url: publicUrl }
+            ? { image_url: mediaPath }
             : file.type.startsWith('video/')
-              ? { video_url: publicUrl }
+              ? { video_url: mediaPath }
               : null;
         if (!payload) return;
         const sent = await sendMessage(cloudChat.conversationId, selfUserId, payload);

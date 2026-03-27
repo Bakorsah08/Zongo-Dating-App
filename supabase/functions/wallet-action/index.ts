@@ -59,7 +59,12 @@ Deno.serve(async (req) => {
         p_delta: -amount,
         p_kind: 'gift_debit',
         p_reference_id: `spend:${Date.now()}`,
-        p_meta: { source: 'wallet-action' },
+        p_meta: {
+          source: 'wallet-action',
+          actor_user_id: requesterId,
+          actor_label: 'user',
+          reason: 'spend_tokens',
+        },
       });
       if (error) return json(500, { ok: false, error: error.message });
       return json(200, { ok: true, data });

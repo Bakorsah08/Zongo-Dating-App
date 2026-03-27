@@ -8,6 +8,28 @@ type AdminRoleRow = {
   created_at: string;
 };
 
+export type AdminAuditLog = {
+  id: number;
+  action: string;
+  actorUserId: string | null;
+  actorLabel: string;
+  targetUserId: string | null;
+  amount: number | null;
+  reason: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: number;
+};
+
+export type AdminAuditLogQuery = {
+  actionPrefix?: string;
+  actorUserId?: string;
+  targetUserId?: string;
+  fromIso?: string;
+  toIso?: string;
+  limit?: number;
+  offset?: number;
+};
+
 function toAdminUser(row: AdminRoleRow, email?: string | null): AdminUser {
   return {
     id: row.user_id,
@@ -121,4 +143,36 @@ export async function deleteAdmin(userId: string): Promise<{ ok: true } | { ok: 
   if (error) return { ok: false, error: error.message };
   if (data?.ok !== true) return { ok: false, error: String(data?.error ?? 'delete_failed') };
   return { ok: true };
+}
+
+export async function fetchAuditLogs(
+  query: AdminAuditLogQuery = {}
+): Promise<{ rows: AdminAuditLog[]; totalCount: number }> {
+  if (!isSupabaseConfigured()) return { rows: [], totalCount: 0 };
+
+  const { data, error } = await getSupabase().rpc('admin_list_audit_logs', {
+    p_action_prefix: query.actionPrefix?.trim() || null,
+    p_actor_user_id: query.actorUserId?.trim() || null,
+    p_target_user_id: query.targetUserId?.trim() || null,
+    p_from: query.fromIso || null,
+    p_to: query.toIso || null,
+    p_limit: Math.max(1, Math.min(500, Math.round(query.limit ?? 100))),
+    p_offset: Math.max(0, Math.round(query.offset ?? 0)),
+  });
+  if (error) throw new Error(error.message);
+
+  const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: Number(row.id),
+    action: String(row.action ?? ''),
+    actorUserId: row.actor_user_id ? String(row.actor_user_id) : null,
+    actorLabel: String(row.actor_label ?? 'system'),
+    targetUserId: row.target_user_id ? String(row.target_user_id) : null,
+    amount: row.amount == null ? null : Number(row.amount),
+    reason: row.reason == null ? null : String(row.reason),
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
+    createdAt: new Date(String(row.created_at)).getTime(),
+  }));
+
+  const totalCount = rows.length > 0 ? Number((data as Array<{ total_count: number }>)[0].total_count ?? 0) : 0;
+  return { rows, totalCount };
 }

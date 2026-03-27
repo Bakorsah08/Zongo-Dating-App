@@ -92,6 +92,8 @@ Deno.serve(async (req) => {
         p_reference_id: `ad_reject:${submission.id}`,
         p_meta: {
           source: 'admin-approve-ad',
+          actor_user_id: requesterId,
+          actor_label: 'admin',
           reason,
         },
       });
@@ -111,6 +113,22 @@ Deno.serve(async (req) => {
         console.error('reject ad failed', error);
         return json(500, { ok: false, error: 'reject_failed' });
       }
+
+      const { error: auditErr } = await admin.rpc('audit_log_event', {
+        p_action: 'ad.review.rejected',
+        p_actor_user_id: requesterId,
+        p_actor_label: 'admin',
+        p_target_user_id: submission.user_id,
+        p_amount: Number(submission.tokens_paid ?? 0),
+        p_reason: reason || 'ad_rejected',
+        p_metadata: {
+          submission_id: submission.id,
+        },
+      });
+      if (auditErr) {
+        console.error('reject ad audit log failed', auditErr);
+      }
+
       return json(200, { ok: true, action, submission_id: submissionId, reason });
     }
 
@@ -157,6 +175,23 @@ Deno.serve(async (req) => {
     if (reviewErr) {
       console.error('approve submission failed', reviewErr);
       return json(500, { ok: false, error: 'approve_failed' });
+    }
+
+    const { error: auditErr } = await admin.rpc('audit_log_event', {
+      p_action: 'ad.review.approved',
+      p_actor_user_id: requesterId,
+      p_actor_label: 'admin',
+      p_target_user_id: submission.user_id,
+      p_amount: Number(submission.tokens_paid ?? 0),
+      p_reason: reason || 'ad_approved',
+      p_metadata: {
+        submission_id: submission.id,
+        carousel_ad_id: adRow.id,
+        duration_days: durationDays,
+      },
+    });
+    if (auditErr) {
+      console.error('approve ad audit log failed', auditErr);
     }
 
     return json(200, {

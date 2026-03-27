@@ -5,6 +5,7 @@ import type { Message } from '../types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { profileRowToPublicUser } from './mapProfileToUser';
+import { getSignedChatMediaUrl } from './supabaseStorage';
 
 export function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
@@ -17,14 +18,19 @@ export type InboxSummary = {
   at: number;
 };
 
-function rowToMessage(row: MessageRow): Message {
+async function rowToMessage(row: MessageRow): Promise<Message> {
+  const [imageUrl, videoUrl, audioUrl] = await Promise.all([
+    getSignedChatMediaUrl(row.image_url),
+    getSignedChatMediaUrl(row.video_url),
+    getSignedChatMediaUrl(row.audio_url),
+  ]);
   return {
     id: row.id,
     senderId: row.sender_id,
     text: row.body ?? undefined,
-    imageUrl: row.image_url ?? undefined,
-    videoUrl: row.video_url ?? undefined,
-    audioUrl: row.audio_url ?? undefined,
+    imageUrl,
+    videoUrl,
+    audioUrl,
     timestamp: new Date(row.created_at).getTime(),
   };
 }
@@ -82,7 +88,7 @@ export async function listMessages(conversationId: string): Promise<Message[]> {
     console.error('listMessages', error);
     return [];
   }
-  return ((data ?? []) as MessageRow[]).map(rowToMessage);
+  return Promise.all(((data ?? []) as MessageRow[]).map(rowToMessage));
 }
 
 export async function sendMessage(
@@ -199,7 +205,9 @@ export function subscribeToConversationMessages(
       },
       (payload) => {
         const row = payload.new as MessageRow;
-        if (row?.id) onInsert(rowToMessage(row));
+        if (row?.id) {
+          void rowToMessage(row).then(onInsert);
+        }
       }
     )
     .subscribe();

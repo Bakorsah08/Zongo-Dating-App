@@ -61,8 +61,10 @@ Deno.serve(async (req) => {
       return json(400, { ok: false, error: 'invalid_payload' });
     }
 
+    const nextStatus =
+      action === 'approve' ? 'approved' : action === 'paid' ? 'paid' : 'rejected';
     const patch: Record<string, unknown> = {
-      status: action === 'approve' ? 'approved' : action,
+      status: nextStatus,
       reviewed_by: requesterId,
       reviewed_at: new Date().toISOString(),
       notes,
@@ -78,6 +80,22 @@ Deno.serve(async (req) => {
     if (error) {
       console.error('cashout review update error', error);
       return json(500, { ok: false, error: 'cashout_update_failed' });
+    }
+
+    const { error: auditErr } = await admin.rpc('audit_log_event', {
+      p_action: `payout.review.${action}`,
+      p_actor_user_id: requesterId,
+      p_actor_label: 'admin',
+      p_target_user_id: data.user_id,
+      p_amount: data.amount,
+      p_reason: notes || `cashout_${action}`,
+      p_metadata: {
+        cashout_request_id: data.id,
+        status: data.status,
+      },
+    });
+    if (auditErr) {
+      console.error('cashout review audit log failed', auditErr);
     }
 
     // If you decide to move transferred_out update here, do it via a secure SQL function.

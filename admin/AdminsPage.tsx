@@ -51,7 +51,7 @@ const AdminsPage: React.FC = () => {
     role: Role;
   }) => {
     const res = await createAdmin(admin);
-    if (!res.ok) {
+    if ('error' in res) {
       alert(res.error);
       return;
     }
@@ -61,7 +61,7 @@ const AdminsPage: React.FC = () => {
 
   const handleUpdateRole = async (id: string, role: Role) => {
     const res = await updateAdminRole(id, role);
-    if (!res.ok) {
+    if ('error' in res) {
       alert(res.error);
       return;
     }
@@ -71,7 +71,7 @@ const AdminsPage: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (confirm('Remove this admin? They will no longer be able to log in.')) {
       const res = await deleteAdmin(id);
-      if (!res.ok) {
+      if ('error' in res) {
         alert(res.error);
         return;
       }

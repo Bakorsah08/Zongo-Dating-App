@@ -51,6 +51,7 @@ import { fetchUserPreferencesFromDb, upsertUserPreferencesDb } from './services/
 import { insertUserAdSubmissionDb, fetchUserAdSubmissionsFromDb } from './services/supabaseUserAds';
 import { recordGiftEvent } from './services/supabaseGifts';
 import { uploadChatMedia as uploadChatMediaToStorage } from './services/supabaseStorage';
+import { trackFailure, trackRealtimeStatus } from './services/monitoring';
 import type { AppNotificationRow } from './models/supabase';
 import DiscoverView from './components/DiscoverView';
 import LandingPage from './components/LandingPage';
@@ -414,7 +415,9 @@ const App: React.FC = () => {
           setNotifTick((t) => t + 1);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        trackRealtimeStatus('app_notifications_subscription', status, err);
+      });
     return () => {
       void sb.removeChannel(ch);
     };
@@ -904,7 +907,10 @@ const App: React.FC = () => {
               const sb = getSupabase();
               if (mode === 'signUp') {
                 const { data, error } = await sb.auth.signUp({ email, password });
-                if (error) return { error: error.message };
+                if (error) {
+                  trackFailure('auth', 'user_sign_up', error, { emailDomain: email.split('@')[1] || 'unknown' });
+                  return { error: error.message };
+                }
                 if (data.user && !data.session) {
                   return {
                     info: 'Check your email to confirm your account, then log in.',
@@ -913,7 +919,10 @@ const App: React.FC = () => {
                 return undefined;
               }
               const { error } = await sb.auth.signInWithPassword({ email, password });
-              if (error) return { error: error.message };
+              if (error) {
+                trackFailure('auth', 'user_sign_in', error, { emailDomain: email.split('@')[1] || 'unknown' });
+                return { error: error.message };
+              }
               return undefined;
             }}
             onGoogleAuth={async () => {

@@ -238,7 +238,7 @@ const AdsCentrePage: React.FC = () => {
                   onClick={() => {
                     if (isSupabaseConfigured()) {
                       void reviewAdSubmission(selectedPending.id, 'approve').then((res) => {
-                        if (!res.ok) {
+                        if ('error' in res) {
                           window.alert(res.error);
                           return;
                         }
@@ -258,7 +258,7 @@ const AdsCentrePage: React.FC = () => {
                   onClick={() => {
                     if (isSupabaseConfigured()) {
                       void reviewAdSubmission(selectedPending.id, 'reject').then((res) => {
-                        if (!res.ok) {
+                        if ('error' in res) {
                           window.alert(res.error);
                           return;
                         }

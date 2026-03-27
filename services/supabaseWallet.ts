@@ -1,6 +1,7 @@
 import type { UserAccountRow } from '../models/supabase';
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { trackFailure } from './monitoring';
 
 function num(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -53,6 +54,7 @@ export async function fetchUserWallet(userId: string): Promise<WalletSnapshot | 
     .maybeSingle();
   if (error) {
     console.error('fetchUserWallet', error);
+    trackFailure('rpc', 'fetch_user_wallet', error);
     return null;
   }
   if (!data) return null;
@@ -70,11 +72,15 @@ export async function bootstrapWallet(userId: string, starterIfZero: number): Pr
   });
   if (error) {
     console.error('wallet_bootstrap_if_zero', error);
+    trackFailure('rpc', 'wallet_bootstrap_if_zero', error);
     return fetchUserWallet(userId);
   }
   const parsed = parseWalletRpc(data);
   if (parsed.ok && parsed.snapshot) return parsed.snapshot;
-  if (!parsed.ok) console.warn('wallet_bootstrap_if_zero', parsed.error, data);
+  if (!parsed.ok) {
+    console.warn('wallet_bootstrap_if_zero', parsed.error, data);
+    trackFailure('rpc', 'wallet_bootstrap_if_zero_parse', parsed.error ?? 'rpc_parse_failed');
+  }
   return fetchUserWallet(userId);
 }
 
@@ -89,11 +95,13 @@ export async function spendTokens(_userId: string, amount: number): Promise<bool
   });
   if (error) {
     console.error('wallet-action:spend_tokens', error);
+    trackFailure('rpc', 'wallet_action_spend_tokens', error);
     return false;
   }
   const parsed = parseWalletRpc((data as { data?: unknown } | null)?.data ?? data);
   if (!parsed.ok) {
     console.warn('wallet-action:spend_tokens', parsed.error, data);
+    trackFailure('rpc', 'wallet_action_spend_tokens_parse', parsed.error ?? 'rpc_parse_failed');
     return false;
   }
   return true;
@@ -110,11 +118,13 @@ export async function cashOutWallet(_userId: string, amount: number): Promise<bo
   });
   if (error) {
     console.error('wallet-action:request_cashout', error);
+    trackFailure('rpc', 'wallet_action_request_cashout', error);
     return false;
   }
   const parsed = parseWalletRpc((data as { data?: unknown } | null)?.data ?? data);
   if (!parsed.ok) {
     console.warn('wallet-action:request_cashout', parsed.error, data);
+    trackFailure('rpc', 'wallet_action_request_cashout_parse', parsed.error ?? 'rpc_parse_failed');
     return false;
   }
   return true;

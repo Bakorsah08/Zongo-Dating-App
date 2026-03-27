@@ -3,3 +3,6 @@
 
 [functions.payments-webhook]
 verify_jwt = false
+
+[functions.monitoring-ingest]
+verify_jwt = false

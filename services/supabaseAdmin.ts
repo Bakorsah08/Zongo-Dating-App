@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import type { AdminUser, Role } from '../auth/types';
+import { trackFailure } from './monitoring';
 
 type AdminRoleRow = {
   user_id: string;
@@ -46,9 +47,13 @@ export async function signInAdmin(
 ): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
   const { error } = await getSupabase().auth.signInWithPassword({ email, password });
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    trackFailure('auth', 'admin_sign_in', error, { emailDomain: email.split('@')[1] || 'unknown' });
+    return { success: false, error: error.message };
+  }
   const role = await fetchMyAdminRole();
   if (!role) {
+    trackFailure('auth', 'admin_role_check_after_sign_in', 'missing_role');
     await getSupabase().auth.signOut();
     return { success: false, error: 'This account is not allowed to access admin.' };
   }
@@ -87,7 +92,11 @@ export async function fetchMyAdminRole(): Promise<Role | null> {
     .select('role')
     .eq('user_id', user.id)
     .maybeSingle();
-  if (error || !data?.role) return null;
+  if (error) {
+    trackFailure('rpc', 'fetch_my_admin_role', error);
+    return null;
+  }
+  if (!data?.role) return null;
   return data.role as Role;
 }
 
@@ -96,7 +105,10 @@ export async function listAdmins(): Promise<AdminUser[]> {
   const { data, error } = await getSupabase().functions.invoke('admin-manage-roles', {
     body: { action: 'list' },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    trackFailure('rpc', 'admin_manage_roles_list', error);
+    throw new Error(error.message);
+  }
   const rows = (data?.admins ?? []) as Array<AdminRoleRow & { email?: string | null }>;
   return rows.map((row) => toAdminUser(row, row.email));
 }
@@ -117,7 +129,10 @@ export async function createAdmin(input: {
       name: input.name?.trim() || undefined,
     },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    trackFailure('rpc', 'admin_manage_roles_create', error);
+    return { ok: false, error: error.message };
+  }
   if (data?.ok !== true) return { ok: false, error: String(data?.error ?? 'create_failed') };
   return { ok: true };
 }
@@ -130,7 +145,10 @@ export async function updateAdminRole(
   const { data, error } = await getSupabase().functions.invoke('admin-manage-roles', {
     body: { action: 'update_role', user_id: userId, role },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    trackFailure('rpc', 'admin_manage_roles_update_role', error);
+    return { ok: false, error: error.message };
+  }
   if (data?.ok !== true) return { ok: false, error: String(data?.error ?? 'update_failed') };
   return { ok: true };
 }
@@ -140,7 +158,10 @@ export async function deleteAdmin(userId: string): Promise<{ ok: true } | { ok: 
   const { data, error } = await getSupabase().functions.invoke('admin-manage-roles', {
     body: { action: 'delete', user_id: userId },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    trackFailure('rpc', 'admin_manage_roles_delete', error);
+    return { ok: false, error: error.message };
+  }
   if (data?.ok !== true) return { ok: false, error: String(data?.error ?? 'delete_failed') };
   return { ok: true };
 }
@@ -159,7 +180,10 @@ export async function fetchAuditLogs(
     p_limit: Math.max(1, Math.min(500, Math.round(query.limit ?? 100))),
     p_offset: Math.max(0, Math.round(query.offset ?? 0)),
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    trackFailure('rpc', 'admin_list_audit_logs', error);
+    throw new Error(error.message);
+  }
 
   const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     id: Number(row.id),

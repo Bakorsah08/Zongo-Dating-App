@@ -6,6 +6,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { profileRowToPublicUser } from './mapProfileToUser';
 import { getSignedChatMediaUrl } from './supabaseStorage';
+import { trackFailure, trackRealtimeStatus } from './monitoring';
 
 export function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
@@ -44,6 +45,7 @@ export async function ensureMatchPair(userA: string, userB: string): Promise<boo
   });
   if (error && error.code !== '23505') {
     console.error('ensureMatchPair', error);
+    trackFailure('rpc', 'ensure_match_pair', error);
     return false;
   }
   return true;
@@ -61,6 +63,7 @@ export async function getOrCreateConversation(userA: string, userB: string): Pro
     .maybeSingle();
   if (selErr) {
     console.error('getOrCreateConversation select', selErr);
+    trackFailure('rpc', 'get_or_create_conversation_select', selErr);
     return null;
   }
   if (found?.id) return found.id as string;
@@ -72,6 +75,7 @@ export async function getOrCreateConversation(userA: string, userB: string): Pro
     .single();
   if (insErr) {
     console.error('getOrCreateConversation insert', insErr);
+    trackFailure('rpc', 'get_or_create_conversation_insert', insErr);
     return null;
   }
   return inserted?.id as string;
@@ -86,6 +90,7 @@ export async function listMessages(conversationId: string): Promise<Message[]> {
     .order('created_at', { ascending: true });
   if (error) {
     console.error('listMessages', error);
+    trackFailure('rpc', 'list_messages', error);
     return [];
   }
   return Promise.all(((data ?? []) as MessageRow[]).map(rowToMessage));
@@ -112,6 +117,7 @@ export async function sendMessage(
     .single();
   if (error) {
     console.error('sendMessage', error);
+    trackFailure('rpc', 'send_message', error);
     return null;
   }
   return rowToMessage(data as MessageRow);
@@ -127,6 +133,7 @@ export async function listInboxForUser(userId: string): Promise<InboxSummary[]> 
     .order('last_message_at', { ascending: false });
   if (cErr) {
     console.error('listInboxForUser conversations', cErr);
+    trackFailure('rpc', 'list_inbox_conversations', cErr);
     return [];
   }
   const list = (convs ?? []) as ConversationRow[];
@@ -140,6 +147,7 @@ export async function listInboxForUser(userId: string): Promise<InboxSummary[]> 
     .order('created_at', { ascending: false });
   if (mErr) {
     console.error('listInboxForUser messages', mErr);
+    trackFailure('rpc', 'list_inbox_messages', mErr);
     return [];
   }
   const lastByConv = new Map<string, MessageRow>();
@@ -155,6 +163,7 @@ export async function listInboxForUser(userId: string): Promise<InboxSummary[]> 
     .in('id', uniqueOthers);
   if (pErr) {
     console.error('listInboxForUser profiles', pErr);
+    trackFailure('rpc', 'list_inbox_profiles', pErr);
     return [];
   }
   const userById = new Map(
@@ -210,7 +219,9 @@ export function subscribeToConversationMessages(
         }
       }
     )
-    .subscribe();
+    .subscribe((status, err) => {
+      trackRealtimeStatus('conversation_messages_subscription', status, err);
+    });
   return channel;
 }
 

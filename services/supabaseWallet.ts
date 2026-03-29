@@ -1,6 +1,7 @@
 import type { UserAccountRow } from '../models/supabase';
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 import { trackFailure } from './monitoring';
 
 function num(v: string | number | null | undefined): number {
@@ -53,7 +54,7 @@ export async function fetchUserWallet(userId: string): Promise<WalletSnapshot | 
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
-    console.error('fetchUserWallet', error);
+    devError('fetchUserWallet', error);
     trackFailure('rpc', 'fetch_user_wallet', error);
     return null;
   }
@@ -71,7 +72,7 @@ export async function bootstrapWallet(userId: string, starterIfZero: number): Pr
     p_starter: Math.max(0, Math.round(starterIfZero)),
   });
   if (error) {
-    console.error('wallet_bootstrap_if_zero', error);
+    devError('wallet_bootstrap_if_zero', error);
     trackFailure('rpc', 'wallet_bootstrap_if_zero', error);
     return fetchUserWallet(userId);
   }
@@ -84,7 +85,7 @@ export async function bootstrapWallet(userId: string, starterIfZero: number): Pr
   return fetchUserWallet(userId);
 }
 
-/** Spends tokens via trusted server mutation. */
+/** Spends tokens via `wallet-action` Edge Function (service_role → wallet_apply_delta). */
 export async function spendTokens(_userId: string, amount: number): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   const { data, error } = await getSupabase().functions.invoke('wallet-action', {
@@ -94,7 +95,7 @@ export async function spendTokens(_userId: string, amount: number): Promise<bool
     },
   });
   if (error) {
-    console.error('wallet-action:spend_tokens', error);
+    devError('wallet-action:spend_tokens', error);
     trackFailure('rpc', 'wallet_action_spend_tokens', error);
     return false;
   }
@@ -107,7 +108,7 @@ export async function spendTokens(_userId: string, amount: number): Promise<bool
   return true;
 }
 
-/** Cash out: moves amount from earnings to transferred_out. RPC uses auth.uid(). */
+/** Cash out request via `wallet-action` → `request_cashout` (JWT); earnings debited server-side. */
 export async function cashOutWallet(_userId: string, amount: number): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   const { data, error } = await getSupabase().functions.invoke('wallet-action', {
@@ -117,7 +118,7 @@ export async function cashOutWallet(_userId: string, amount: number): Promise<bo
     },
   });
   if (error) {
-    console.error('wallet-action:request_cashout', error);
+    devError('wallet-action:request_cashout', error);
     trackFailure('rpc', 'wallet_action_request_cashout', error);
     return false;
   }

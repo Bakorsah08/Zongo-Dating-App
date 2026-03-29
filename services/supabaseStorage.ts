@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 import { trackFailure } from './monitoring';
 
 const BUCKET = 'chat-media';
@@ -27,7 +28,7 @@ export async function uploadChatMedia(userId: string, blob: Blob, mimeHint?: str
     upsert: false,
   });
   if (error) {
-    console.error('uploadChatMedia', error);
+    devError('uploadChatMedia', error);
     trackFailure('storage', 'upload_chat_media', error, { bucket: BUCKET });
     return null;
   }
@@ -48,7 +49,7 @@ export async function getSignedChatMediaUrl(pathOrUrl: string | null | undefined
     .from(BUCKET)
     .createSignedUrl(pathOrUrl, SIGNED_URL_TTL_SECONDS);
   if (error) {
-    console.error('getSignedChatMediaUrl', error);
+    devError('getSignedChatMediaUrl', error);
     trackFailure('storage', 'create_signed_chat_media_url', error, { bucket: BUCKET });
     return undefined;
   }

@@ -1,25 +1,28 @@
-
 import React from 'react';
 import { getTokenPackages } from '../data';
+import type { TokenPackage } from '../types';
 import BackButton from './BackButton';
 
 interface TokenShopViewProps {
   currentTokens: number;
-  onPurchase: (tokens: number, packagePriceUsd?: number) => Promise<void> | void;
+  packages?: TokenPackage[];
+  onPurchase: (pkg: TokenPackage) => Promise<void> | void;
   onBack: () => void;
   purchasePending?: boolean;
   purchaseNotice?: string | null;
 }
 
-const parsePriceUsd = (price: string): number => parseFloat(price.replace(/[^0-9.]/g, '')) || 0;
-
 const TokenShopView: React.FC<TokenShopViewProps> = ({
   currentTokens,
+  packages,
   onPurchase,
   onBack,
   purchasePending = false,
   purchaseNotice,
 }) => {
+  const list = (packages && packages.length > 0 ? packages : getTokenPackages()).filter(
+    (p) => p && typeof p.id === 'string'
+  );
   return (
     <div className="min-h-full bg-white p-6 pb-28 text-zinc-900">
       <div className="mb-8 flex items-center justify-between">
@@ -42,11 +45,11 @@ const TokenShopView: React.FC<TokenShopViewProps> = ({
             {purchaseNotice}
           </div>
         ) : null}
-        {getTokenPackages().map((pkg) => (
+        {list.map((pkg) => (
           <button
             key={pkg.id}
             type="button"
-            onClick={() => onPurchase(pkg.tokens, parsePriceUsd(pkg.price))}
+            onClick={() => onPurchase(pkg)}
             disabled={purchasePending}
             className="group flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-all hover:border-pink-200 hover:bg-pink-50/40 active:scale-[0.98]"
           >
@@ -68,8 +71,8 @@ const TokenShopView: React.FC<TokenShopViewProps> = ({
 
       <div className="mt-12 text-center">
         <p className="text-[10px] leading-relaxed text-zinc-500">
-          By purchasing, you agree to Zongo&apos;s Terms of Service.
-          Payments are handled securely via your App Store account.
+          By purchasing, you agree to Zongo&apos;s Terms of Service. On the web, checkout is processed by Stripe;
+          in the mobile apps, purchases use your App Store or Google Play account with RevenueCat.
         </p>
       </div>
     </div>

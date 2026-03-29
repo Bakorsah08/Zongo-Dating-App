@@ -2,6 +2,7 @@ import type { ProfileRowPartial } from '../models/supabase';
 import { SupabaseTable } from '../models/supabase';
 import type { User } from '../types';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 import { profileRowToPublicUser } from './mapProfileToUser';
 
 const PAGE_LIMIT = 200;
@@ -14,7 +15,7 @@ export async function fetchDiscoverUsers(viewerId: string): Promise<User[]> {
     .neq('id', viewerId)
     .limit(PAGE_LIMIT);
   if (error) {
-    console.error('fetchDiscoverUsers', error);
+    devError('fetchDiscoverUsers', error);
     return [];
   }
   const rows = (data ?? []) as ProfileRowPartial[];
@@ -28,7 +29,7 @@ export async function fetchProfilesByIds(ids: string[]): Promise<User[]> {
     .select('*')
     .in('id', ids);
   if (error) {
-    console.error('fetchProfilesByIds', error);
+    devError('fetchProfilesByIds', error);
     return [];
   }
   const rows = (data ?? []) as ProfileRowPartial[];

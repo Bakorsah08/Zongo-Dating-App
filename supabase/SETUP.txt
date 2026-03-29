@@ -1,7 +1,13 @@
-Supabase setup (production auth + profiles)
-==========================================
+Supabase setup
+==============
 
-1. Create a project at https://supabase.com
+Use the sections below: **Local development** for day-to-day work, **Production** for deployed apps.
+
+
+Local development
+-----------------
+
+1. Create a project at https://supabase.com (free tier is fine).
 
 2. Project Settings → API: copy Project URL and anon (public) key.
 
@@ -9,86 +15,116 @@ Supabase setup (production auth + profiles)
    VITE_SUPABASE_URL
    VITE_SUPABASE_ANON_KEY
 
-4. SQL → New query → run migrations in order (same order as in supabase/migrations/):
+   Optional — “Continue as guest” in the app: Authentication → Providers → Anonymous → enable.
+
+4. SQL → New query → run migrations in order (same order as in supabase/migrations/), or:
+   npx supabase login   (first time only)
+   npm run supabase:migrate
+
+   Minimum sequence (see folder for the full list and any newer files):
    - 20250323120000_profiles.sql
    - 20250324120000_zongo_domain_schema.sql
-   - 20250324140000_storage_realtime.sql (chat media bucket + Realtime on app_notifications)
-   - 20250325150000_wallet_rpc_rls.sql (wallet RPCs; removes direct client UPDATE on user_account)
-   - 20260324170000_admin_wallet_hardening.sql (admin roles, wallet ledger, cashout queue, secure RPCs)
-   - 20260324173000_payment_webhook_idempotency.sql (payment webhook idempotency table)
-   - 20260325110000_abuse_rate_limits.sql (rate limiting for messages/notifications/follows/blocks/gifts)
-   Or use Supabase CLI:
-   - npx supabase login   (first time only)
-   - npm run supabase:migrate
+   - 20250324140000_storage_realtime.sql
+   - 20250325150000_wallet_rpc_rls.sql
+   - 20260324170000_admin_wallet_hardening.sql
+   - 20260324173000_payment_webhook_idempotency.sql
+   - 20260324181500_disable_client_wallet_set_balance.sql
+   - 20260324182500_drop_legacy_wallet_set_balance_rpc.sql
+   - …then remaining migrations in timestamp order through 20260327231000_payment_webhook_provider_column.sql
 
-   Migration authoring checklist (required):
-   - Name files as: YYYYMMDDHHmmss_description.sql (lowercase snake_case description).
-   - Keep timestamps strictly increasing so migration order is deterministic.
-   - Add rollback guidance in every migration using:
-     -- Rollback: <manual revert steps>
-   - Validate before commit:
-     npm run validate:migrations
+   Migration authoring checklist:
+   - Name files: YYYYMMDDHHmmss_description.sql (lowercase snake_case description).
+   - Timestamps strictly increasing.
+   - Add rollback guidance: -- Rollback: <manual revert steps>
+   - Validate: npm run validate:migrations
 
    After the domain migration, public.profiles no longer stores email (use Supabase Auth only).
 
 5. Authentication → URL configuration:
-   - Site URL: http://localhost:3000 (this app uses Vite on port 3000 — see vite.config.ts).
-   - Redirect URLs: add exactly what you use after OAuth, e.g.:
-     http://localhost:3000
-     http://localhost:3000/
-     (Add your production origin the same way when you deploy.)
+   - Site URL: http://localhost:3000 (Vite default — see vite.config.ts).
+   - Redirect URLs: http://localhost:3000 and http://localhost:3000/
 
-6. Authentication → Providers → Email:
-   - Enable Email (password sign-up / sign-in).
+6. Authentication → Providers → Email: enable password sign-up / sign-in.
 
-7. Authentication → Providers → Google (OAuth):
-   a) Google Cloud Console (https://console.cloud.google.com):
-      - Create or select a project.
-      - APIs & Services → OAuth consent screen: choose External (or Internal for Workspace),
-        add app name, support email, developer contact; add scopes openid, email, profile if prompted.
-      - APIs & Services → Credentials → Create credentials → OAuth client ID.
-      - Application type: Web application.
-      - Authorized JavaScript origins: http://localhost:3000 (and your production URL).
-      - Authorized redirect URIs: copy the “Callback URL (for OAuth)” from the Supabase Google
-        provider panel (looks like https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback).
-        Paste it here — it must match exactly.
-   b) Supabase Dashboard → Authentication → Providers → Google:
-      - Turn Google ON.
-      - Client ID: from Google Cloud (OAuth 2.0 Client ID).
-      - Client Secret: from Google Cloud.
-      - Save.
+7. Authentication → Providers → Google (optional for local):
+   - Google Cloud Console: OAuth client (Web), authorized origins http://localhost:3000,
+     redirect URI = Supabase Google provider “Callback URL”.
+   - Supabase: enable Google, paste Client ID and Secret.
 
-   The app already calls signInWithOAuth({ provider: 'google' }) and redirects back to your
-   site root; no extra env vars are required beyond VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+8. For faster local iteration you may disable Email “Confirm email” in the Supabase dashboard.
+   Turn confirmation back on before production.
 
-8. For local testing without email confirmation delays:
-   Authentication → Providers → Email → disable "Confirm email" (re-enable before real production).
+9. Edge Functions: deploy the functions in supabase/functions/ (see Production → step 2)
+   so wallet spend/cashout and admin APIs work. For local-only UI testing without functions,
+   some flows will fail until functions are deployed or run via `supabase functions serve`.
 
-9. npm run dev — sign up, pick gender, open Profile: data loads from public.profiles with RLS.
+10. npm run dev — sign up, pick gender, use the app.
 
-10. Deploy trusted Edge Functions (required for production-sensitive flows):
-   - supabase/functions/payments-webhook
-   - supabase/functions/admin-review-cashout
-   - supabase/functions/admin-approve-ad
-   - supabase/functions/admin-manage-roles
-   - supabase/functions/wallet-action
-   JWT at the gateway: see supabase/config.toml (user-facing functions verify JWT;
-   payments-webhook uses verify_jwt = false for provider callbacks).
-   Example:
+11. Mock app login without Supabase keys: only in Vite dev (`npm run dev`). Production builds
+    require Supabase env vars and will show a configuration screen instead of the app.
+
+
+Production
+----------
+
+1. Create or use your production Supabase project. Set production **VITE_SUPABASE_URL**
+   and **VITE_SUPABASE_ANON_KEY** in your hosting provider (never commit real keys).
+
+2. Run the same migration sequence as in Local development (step 4) against the production database.
+
+3. Authentication → URL configuration:
+   - Site URL: your production origin (https://your-domain.com).
+   - Redirect URLs: production origin(s) and paths your OAuth flow uses.
+
+4. Authentication → Email: keep “Confirm email” enabled for real users unless your product policy says otherwise.
+
+5. Deploy Edge Functions (JWT defaults are ON in supabase/config.toml; webhooks stay OFF):
+
    npx supabase functions deploy payments-webhook
+   npx supabase functions deploy create-stripe-checkout
+   npx supabase functions deploy stripe-webhook
+   npx supabase functions deploy revenuecat-webhook
    npx supabase functions deploy admin-review-cashout
    npx supabase functions deploy admin-approve-ad
    npx supabase functions deploy admin-manage-roles
    npx supabase functions deploy wallet-action
+   npx supabase functions deploy monitoring-ingest
 
-11. Configure function secrets in Supabase:
-   - SUPABASE_URL
-   - SUPABASE_ANON_KEY
-   - SUPABASE_SERVICE_ROLE_KEY
-   - PAYMENT_WEBHOOK_SECRET (for webhook signature verification)
+6. Configure function secrets in Supabase (Project Settings → Edge Functions):
+   SUPABASE_URL
+   SUPABASE_ANON_KEY
+   SUPABASE_SERVICE_ROLE_KEY
+   PAYMENT_WEBHOOK_SECRET  (for payments-webhook: HMAC custom aggregators)
 
-12. Production safety gate:
-   - In production, this app now blocks local mock auth fallback when Supabase is not configured.
-   - Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are present in your production environment.
+   Stripe (web checkout → wallet credit):
+   STRIPE_SECRET_KEY
+   STRIPE_WEBHOOK_SECRET   (Signing secret from Stripe Dashboard → Webhooks)
+   CHECKOUT_APP_BASE_URL   (no trailing slash; same origin users return to, e.g. https://your-domain.com)
+   STRIPE_CHECKOUT_PRICE_MAP  (JSON map of app package id → Stripe Price id + tokens, e.g.
+     {"p1":{"priceId":"price_xxx","tokens":100},"p2":{"priceId":"price_yyy","tokens":500},"p3":{"priceId":"price_zzz","tokens":1000}}
+     Must match TOKEN_PACKAGES ids in constants.tsx / admin token packages.)
 
-If the migration errors on "execute procedure", try replacing it with "execute function" for your Postgres version.
+   RevenueCat (iOS / Android consumables → same wallet via webhook):
+   REVENUECAT_WEBHOOK_AUTHORIZATION  (exact shared secret you configure in RevenueCat webhook Authorization)
+   REVENUECAT_PRODUCT_TOKEN_MAP      (JSON: store product_id → integer tokens, consumable SKUs only)
+
+   Avoid double-credits: if Stripe is also connected inside RevenueCat for the same web purchases,
+   disable either stripe-webhook or the RevenueCat path for those events so only one rail calls wallet_apply_delta.
+
+7. Stripe: add endpoint URL https://<project-ref>.supabase.co/functions/v1/stripe-webhook (raw body).
+   RevenueCat: point webhooks to https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
+   Use the Supabase function JWT bypass already set in config.toml (verify_jwt = false for these two).
+
+8. Production app gate: the web app runs with import.meta.env.PROD and refuses to load the main
+   UI if Supabase env vars are missing. Confirm CI/CD injects VITE_SUPABASE_* for every deploy.
+
+9. Backup and recovery:
+   - Copy .env.backup.example -> .env.backup.local and set SUPABASE_DB_URL (source) and
+     SUPABASE_RESTORE_DB_URL (disposable drill DB).
+   - npm run supabase:backup
+   - set SUPABASE_RESTORE_CONFIRM=yes
+     npm run supabase:restore:drill
+   - Cadence: daily backups; monthly restore drill minimum.
+   - Keep DB credentials out of VITE_* frontend env files.
+
+If the migration errors on "execute procedure", try "execute function" for your Postgres version.

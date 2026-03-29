@@ -29,6 +29,7 @@ function submissionThumbSrc(s: UserAdSubmission): string | null {
 const AdsCentrePage: React.FC = () => {
   const [ads, setAds] = useState<ExploreCarouselAd[]>([]);
   const [pendingSubs, setPendingSubs] = useState<UserAdSubmission[]>([]);
+  const [pendingSubsError, setPendingSubsError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,14 +55,19 @@ const AdsCentrePage: React.FC = () => {
     };
 
     if (isSupabaseConfigured()) {
+      setPendingSubsError(null);
       void listPendingAdSubmissions()
-        .then((rows) => applyState(rows))
-        .catch((err) => {
-          console.error('listPendingAdSubmissions', err);
+        .then((rows) => {
+          setPendingSubsError(null);
+          applyState(rows);
+        })
+        .catch(() => {
+          setPendingSubsError('Could not load pending submissions. Check your connection and try again.');
           applyState([]);
         });
       return;
     }
+    setPendingSubsError(null);
     const pending = adminStore.getUserAdSubmissions().filter((s) => s.status === 'pending');
     applyState(pending);
   }, []);
@@ -474,6 +480,18 @@ const AdsCentrePage: React.FC = () => {
                 ? 'None waiting. Submissions from the app show here.'
                 : `${pendingSubs.length} waiting for approval`}
             </p>
+            {pendingSubsError ? (
+              <div className="mb-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
+                <p className="font-medium">{pendingSubsError}</p>
+                <button
+                  type="button"
+                  onClick={() => syncFromStore()}
+                  className="mt-2 rounded-lg bg-red-700 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-600"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
             <div className="max-h-[min(36vh,320px)] overflow-y-auto pr-1">
               <div className="grid grid-cols-3 gap-2">
                 {pendingSubs.map((s) => {

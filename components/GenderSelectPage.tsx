@@ -25,7 +25,7 @@ const GenderSelectPage: React.FC<GenderSelectPageProps> = ({ onSelect }) => {
       </div>
       <div className="relative z-10 w-full max-w-sm text-center flex flex-col items-center">
         <h1 className="text-2xl font-bold mb-1">I am</h1>
-        <p className="text-white/70 text-sm mb-8">Choose your gender</p>
+        <p className="text-white/70 text-sm mb-8">Choose your gender to personalize your experience</p>
 
         {/* Two-option card style (Dribbble-style gender selection) - 70% size */}
         <div className="w-full flex gap-4 justify-center scale-[0.7] origin-center">

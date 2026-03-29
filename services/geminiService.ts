@@ -1,5 +1,6 @@
-
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { devError } from "../lib/devLog";
+import { trackFailure } from "./monitoring";
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 
@@ -16,7 +17,8 @@ export const generateChatResponse = async (userMessage: string, partnerName: str
     });
     return response.text;
   } catch (error) {
-    console.error("Gemini Error:", error);
+    devError("Gemini chat generateContent", error);
+    trackFailure("ai", "gemini_chat_reply", error);
     return "Hey! Sorry, I missed that. Can you say that again?";
   }
 };

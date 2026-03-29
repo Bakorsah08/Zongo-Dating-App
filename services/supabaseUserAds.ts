@@ -2,6 +2,7 @@ import type { UserAdSubmission } from '../types';
 import type { UserAdSubmissionRow } from '../models/supabase';
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 function rowToSubmission(row: UserAdSubmissionRow): UserAdSubmission {
   return {
@@ -32,7 +33,7 @@ export async function fetchUserAdSubmissionsFromDb(userId: string): Promise<User
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('fetchUserAdSubmissionsFromDb', error);
+    devError('fetchUserAdSubmissionsFromDb', error);
     return [];
   }
   return ((data ?? []) as UserAdSubmissionRow[]).map(rowToSubmission);
@@ -73,7 +74,7 @@ export async function insertUserAdSubmissionDb(
     .select('id')
     .single();
   if (error) {
-    console.error('insertUserAdSubmissionDb', error);
+    devError('insertUserAdSubmissionDb', error);
     return { ok: false, error: error.message };
   }
   if (!data?.id) return { ok: false, error: 'No id returned' };

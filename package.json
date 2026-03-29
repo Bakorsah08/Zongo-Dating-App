@@ -15,7 +15,9 @@
     "check:secrets": "node scripts/secret-scan.mjs",
     "test:rls": "node scripts/rls-negative-test.mjs",
     "setup:hooks": "node scripts/setup-hooks.mjs",
-    "supabase:migrate": "node scripts/supabase-apply-migrations.mjs"
+    "supabase:migrate": "node scripts/supabase-apply-migrations.mjs",
+    "supabase:backup": "node scripts/supabase-backup.mjs",
+    "supabase:restore:drill": "node scripts/supabase-restore-drill.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",

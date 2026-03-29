@@ -2,6 +2,7 @@ import { SupabaseTable } from '../models/supabase';
 import type { UserPreferences } from '../userPreferencesStore';
 import { USER_PREFERENCES_DEFAULTS } from '../userPreferencesStore';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === 'object' && !Array.isArray(v);
@@ -50,7 +51,7 @@ export async function fetchUserPreferencesFromDb(userId: string): Promise<Partia
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
-    console.error('fetchUserPreferencesFromDb', error);
+    devError('fetchUserPreferencesFromDb', error);
     return null;
   }
   if (!data) return null;
@@ -82,7 +83,7 @@ export async function upsertUserPreferencesDb(userId: string, prefs: UserPrefere
     { onConflict: 'user_id' }
   );
   if (error) {
-    console.error('upsertUserPreferencesDb', error);
+    devError('upsertUserPreferencesDb', error);
     return false;
   }
   return true;

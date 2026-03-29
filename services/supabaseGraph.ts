@@ -1,5 +1,6 @@
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 export async function listFollowingIds(userId: string): Promise<string[]> {
   if (!isSupabaseConfigured()) return [];
@@ -8,7 +9,7 @@ export async function listFollowingIds(userId: string): Promise<string[]> {
     .select('following_id')
     .eq('follower_id', userId);
   if (error) {
-    console.error('listFollowingIds', error);
+    devError('listFollowingIds', error);
     return [];
   }
   return (data ?? []).map((r: { following_id: string }) => r.following_id);
@@ -21,7 +22,7 @@ export async function listBlockedIds(userId: string): Promise<string[]> {
     .select('blocked_id')
     .eq('blocker_id', userId);
   if (error) {
-    console.error('listBlockedIds', error);
+    devError('listBlockedIds', error);
     return [];
   }
   return (data ?? []).map((r: { blocked_id: string }) => r.blocked_id);
@@ -35,7 +36,7 @@ export async function addFollow(followerId: string, followingId: string): Promis
   });
   if (error) {
     if (error.code === '23505') return true;
-    console.error('addFollow', error);
+    devError('addFollow', error);
     return false;
   }
   return true;
@@ -49,7 +50,7 @@ export async function removeFollow(followerId: string, followingId: string): Pro
     .eq('follower_id', followerId)
     .eq('following_id', followingId);
   if (error) {
-    console.error('removeFollow', error);
+    devError('removeFollow', error);
     return false;
   }
   return true;
@@ -63,7 +64,7 @@ export async function addBlock(blockerId: string, blockedId: string): Promise<bo
   });
   if (error) {
     if (error.code === '23505') return true;
-    console.error('addBlock', error);
+    devError('addBlock', error);
     return false;
   }
   return true;
@@ -77,7 +78,7 @@ export async function removeBlock(blockerId: string, blockedId: string): Promise
     .eq('blocker_id', blockerId)
     .eq('blocked_id', blockedId);
   if (error) {
-    console.error('removeBlock', error);
+    devError('removeBlock', error);
     return false;
   }
   return true;

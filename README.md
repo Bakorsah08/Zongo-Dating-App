@@ -29,6 +29,34 @@ View your app in AI Studio: https://ai.studio/apps/drive/1sVlZV6_YCz06Nk1KwKlMeM
 
 This command auto-links to your project (using the project ref from `VITE_SUPABASE_URL`) and runs `supabase db push`.
 
+## Supabase backups and recovery drills
+
+1. Copy `.env.backup.example` to `.env.backup.local`.
+2. Fill `SUPABASE_DB_URL` with your production DB URL (never commit this file).
+3. Run a backup:
+   `npm run supabase:backup`
+4. Run a restore drill against a disposable database:
+   - Set `SUPABASE_RESTORE_DB_URL` to a staging/drill DB.
+   - Set `SUPABASE_RESTORE_CONFIRM=yes`.
+   - Run: `npm run supabase:restore:drill`
+
+What this does:
+- `supabase:backup` creates timestamped backup sets in `backups/supabase/` with:
+  - `schema.sql`
+  - `data.sql`
+  - `roles.sql`
+  - `checksums.sha256`
+  - `meta.json`
+- Old backup sets are pruned automatically (default 14 days; configurable).
+- `supabase:restore:drill` replays `schema.sql` + `data.sql` into your drill DB and runs a lightweight verification query.
+- If Supabase CLI dump requires Docker and Docker is unavailable, the script automatically falls back to native `pg_dump` / `pg_dumpall`.
+- On Windows, it auto-detects common PostgreSQL install paths. You can also set `SUPABASE_PG_BIN_DIR` in `.env.backup.local`.
+
+Recommended production cadence:
+- Run `supabase:backup` daily via CI scheduler.
+- Run `supabase:restore:drill` at least monthly.
+- Keep a written incident runbook with responsible owners and an RTO/RPO target.
+
 ## Security and Secrets
 
 - `.env.local` is intentionally ignored by git (`*.local` in `.gitignore`).

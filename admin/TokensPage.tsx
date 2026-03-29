@@ -1,36 +1,107 @@
 import React, { useState, useEffect } from 'react';
 import type { TokenPackage } from '../types';
 import { adminStore } from './store';
+import InlineErrorBanner from '../components/InlineErrorBanner';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
+import {
+  fetchActiveTokenPackagesFromDb,
+  adminUpsertTokenPackageDb,
+  adminDeleteTokenPackageDb,
+} from '../services/supabaseTokenPackages';
 
 const TokensPage: React.FC = () => {
   const [packages, setPackages] = useState<TokenPackage[]>([]);
   const [editing, setEditing] = useState<TokenPackage | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadPackages = () => setPackages(adminStore.getTokenPackages());
+  const supabaseEnabled = isSupabaseConfigured();
+
+  const loadPackages = async () => {
+    setError(null);
+    if (!supabaseEnabled) {
+      setPackages(adminStore.getTokenPackages());
+      return;
+    }
+    try {
+      const list = await fetchActiveTokenPackagesFromDb();
+      setPackages(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load token packages.');
+      setPackages([]);
+    }
+  };
 
   useEffect(() => {
-    loadPackages();
+    void loadPackages();
   }, []);
 
   const handleSave = (updates: Partial<TokenPackage>) => {
     if (!editing) return;
-    adminStore.updateTokenPackage(editing.id, updates);
-    loadPackages();
-    setEditing(null);
+    const next = { ...editing, ...updates };
+    void (async () => {
+      setError(null);
+      if (!supabaseEnabled) {
+        adminStore.updateTokenPackage(editing.id, updates);
+        setEditing(null);
+        setPackages(adminStore.getTokenPackages());
+        return;
+      }
+      const res = await adminUpsertTokenPackageDb({
+        id: next.id,
+        tokens: next.tokens,
+        display_price: next.price,
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setEditing(null);
+      await loadPackages();
+    })();
   };
 
   const handleAdd = (pkg: TokenPackage) => {
-    adminStore.addTokenPackage(pkg);
-    loadPackages();
-    setShowAdd(false);
+    void (async () => {
+      setError(null);
+      if (!supabaseEnabled) {
+        adminStore.addTokenPackage(pkg);
+        setShowAdd(false);
+        setPackages(adminStore.getTokenPackages());
+        return;
+      }
+      const res = await adminUpsertTokenPackageDb({
+        id: pkg.id,
+        tokens: pkg.tokens,
+        display_price: pkg.price,
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setShowAdd(false);
+      await loadPackages();
+    })();
   };
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this token package?')) {
-      adminStore.deleteTokenPackage(id);
-      loadPackages();
-      setEditing(null);
+      void (async () => {
+        setError(null);
+        if (!supabaseEnabled) {
+          adminStore.deleteTokenPackage(id);
+          setEditing(null);
+          setPackages(adminStore.getTokenPackages());
+          return;
+        }
+        const res = await adminDeleteTokenPackageDb(id);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setEditing(null);
+        await loadPackages();
+      })();
     }
   };
 
@@ -48,6 +119,15 @@ const TokensPage: React.FC = () => {
           + Add Package
         </button>
       </div>
+
+      {error ? (
+        <InlineErrorBanner
+          message={error}
+          onRetry={() => void loadPackages()}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
+      ) : null}
 
       <div className="grid gap-4">
         {packages.map((pkg) => (

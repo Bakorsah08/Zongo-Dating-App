@@ -10,6 +10,7 @@ import {
   unsubscribeChannel,
 } from '../services/supabaseMessaging';
 import BackButton from './BackButton';
+import InlineErrorBanner from './InlineErrorBanner';
 
 interface ChatRoomViewProps {
   partner: User;
@@ -27,6 +28,9 @@ interface ChatRoomViewProps {
   uploadChatMedia?: (blob: Blob, mimeType?: string) => Promise<string | null>;
   /** Persist gift to `gift_events` after tokens are deducted. */
   onGiftRecorded?: (gift: Gift, partnerId: string) => void;
+  /** Shown when the cloud thread could not be created (e.g. network). */
+  threadSetupError?: string | null;
+  onDismissThreadSetupError?: () => void;
 }
 
 /** Curated picker — common chat / reaction emojis (no extra dependency). */
@@ -48,6 +52,8 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   deductTokens,
   uploadChatMedia,
   onGiftRecorded,
+  threadSetupError = null,
+  onDismissThreadSetupError,
 }) => {
   const { videoCallEnabled, giftingEnabled } = getMonetizationSettings();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -65,6 +71,10 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   const voiceBlobUrlsRef = useRef<string[]>([]);
   /** True while the mic button is held (press-and-hold to record). */
   const voiceHoldActiveRef = useRef(false);
+
+  const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
+  const [messagesReloadTick, setMessagesReloadTick] = useState(0);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const [viewerState, setViewerState] = useState<{
     isOpen: boolean;
@@ -92,9 +102,15 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     if (!cloudChat) return;
     let channel: ReturnType<typeof subscribeToConversationMessages> = null;
     let cancelled = false;
+    setMessagesLoadError(null);
     (async () => {
-      const list = await listMessages(cloudChat.conversationId);
+      const { messages: list, error: loadErr } = await listMessages(cloudChat.conversationId);
       if (cancelled) return;
+      if (loadErr) {
+        setMessagesLoadError(loadErr);
+        setMessages([]);
+        return;
+      }
       if (list.length === 0 && cloudChat.partnerIsAi) {
         setMessages([
           {
@@ -115,7 +131,7 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
       cancelled = true;
       unsubscribeChannel(channel);
     };
-  }, [cloudChat?.conversationId, cloudChat?.partnerIsAi, partner.id, partner.name]);
+  }, [cloudChat?.conversationId, cloudChat?.partnerIsAi, partner.id, partner.name, messagesReloadTick]);
 
   useEffect(() => {
     if (!showEmojiPicker) return;
@@ -207,9 +223,11 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
               const sent = await sendMessage(cloudChat.conversationId, selfUserId, {
                 audio_url: mediaPath,
               });
-              if (sent) {
-                setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+              if (!sent) {
+                setSendError('Could not send your voice note. Please try again.');
+                return;
               }
+              setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
               if (cloudChat.partnerIsAi) {
                 setIsTyping(true);
                 setTimeout(() => {
@@ -335,12 +353,16 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     setShowEmojiPicker(false);
     const text = input.trim();
     setInput('');
+    setSendError(null);
 
     if (cloudChat) {
       const sent = await sendMessage(cloudChat.conversationId, selfUserId, { text });
-      if (sent) {
-        setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+      if (!sent) {
+        setInput(text);
+        setSendError('Could not send your message. Check your connection and try again.');
+        return;
       }
+      setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
       if (cloudChat.partnerIsAi) {
         setIsTyping(true);
         const aiResponse = await generateChatResponse(text, partner.name);
@@ -399,9 +421,11 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
               : null;
         if (!payload) return;
         const sent = await sendMessage(cloudChat.conversationId, selfUserId, payload);
-        if (sent) {
-          setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+        if (!sent) {
+          setSendError('Could not send this file. Please try again.');
+          return;
         }
+        setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
         if (cloudChat.partnerIsAi) {
           setIsTyping(true);
           setTimeout(() => {
@@ -524,6 +548,24 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
       {/* Scrollable messages — fills space above pinned composer */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-zinc-50 p-4">
         <div className="mx-auto flex max-w-lg flex-col space-y-4">
+          {threadSetupError ? (
+            <InlineErrorBanner
+              message={threadSetupError}
+              onDismiss={onDismissThreadSetupError}
+            />
+          ) : null}
+          {messagesLoadError ? (
+            <InlineErrorBanner
+              message={messagesLoadError}
+              onRetry={() => {
+                setMessagesLoadError(null);
+                setMessagesReloadTick((t) => t + 1);
+              }}
+            />
+          ) : null}
+          {sendError ? (
+            <InlineErrorBanner message={sendError} onDismiss={() => setSendError(null)} />
+          ) : null}
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.senderId === selfUserId ? 'justify-end' : 'justify-start'}`}>
               <div

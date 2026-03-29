@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { AdminUser, Role } from '../auth/types';
 import { useAuthContext } from '../auth/AuthContext';
+import { devError } from '../lib/devLog';
 import { createAdmin, deleteAdmin, listAdmins, updateAdminRole } from '../services/supabaseAdmin';
 
 const ROLES: Role[] = ['super_admin', 'support', 'moderator'];
@@ -20,7 +21,7 @@ const AdminsPage: React.FC = () => {
         if (mounted) setAdmins(rows);
       })
       .catch((e) => {
-        console.error('listAdmins', e);
+        devError('listAdmins', e);
         if (mounted) alert('Failed to load admin users.');
       })
       .finally(() => {

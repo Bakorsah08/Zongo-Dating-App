@@ -1,5 +1,6 @@
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 export async function recordGiftEvent(
   senderId: string,
@@ -15,7 +16,7 @@ export async function recordGiftEvent(
     token_value: Math.max(0, Math.round(gift.value)),
   });
   if (error) {
-    console.error('recordGiftEvent', error);
+    devError('recordGiftEvent', error);
     return false;
   }
   return true;

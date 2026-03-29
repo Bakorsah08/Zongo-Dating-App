@@ -2,6 +2,7 @@ import type { ExploreCarouselAd } from '../types';
 import type { ExploreCarouselAdRow } from '../models/supabase';
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 function rowToAd(row: ExploreCarouselAdRow): ExploreCarouselAd {
   const userSource = row.source === 'user' ? 'user' : 'platform';
@@ -37,7 +38,7 @@ export async function fetchLiveCarouselAdsFromDb(): Promise<ExploreCarouselAd[]>
     .eq('enabled', true)
     .order('created_at', { ascending: true });
   if (error) {
-    console.error('fetchLiveCarouselAdsFromDb', error);
+    devError('fetchLiveCarouselAdsFromDb', error);
     return [];
   }
   const rows = (data ?? []) as ExploreCarouselAdRow[];

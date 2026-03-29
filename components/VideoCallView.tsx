@@ -4,6 +4,8 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { User } from '../types';
 import { getMonetizationSettings } from '../data';
 import { encode, decode, decodeAudioData } from '../services/geminiService';
+import { trackFailure } from '../services/monitoring';
+import { devError } from '../lib/devLog';
 import BackButton from './BackButton';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -61,6 +63,8 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [countdown, setCountdown] = useState(10);
+  const [callAttemptKey, setCallAttemptKey] = useState(0);
+  const billedOpeningRef = useRef(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null); // Ref for AI partner video
@@ -78,9 +82,12 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
     let active = true;
 
     const startCall = async () => {
-      if (!deductTokens(videoCallTokens)) {
-        onEnd();
-        return;
+      if (!billedOpeningRef.current) {
+        if (!deductTokens(videoCallTokens)) {
+          onEnd();
+          return;
+        }
+        billedOpeningRef.current = true;
       }
 
       try {
@@ -126,8 +133,14 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
                 sourcesRef.current.clear();
               }
             },
-            onerror: (e) => setError("Connection failed"),
-            onclose: () => console.log("Closed"),
+            onerror: (e) => {
+              devError('VideoCallView Gemini live onerror', e);
+              trackFailure('ai', 'gemini_live_session', e);
+              setError('Connection to the assistant dropped. You can try again.');
+            },
+            onclose: () => {
+              if (import.meta.env.DEV) console.log('Gemini live session closed');
+            },
           },
           config: {
             responseModalities: [Modality.AUDIO],
@@ -160,8 +173,9 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
         scriptProcessor.connect(inputAudioContext.destination);
 
       } catch (err) {
-        console.error(err);
-        setError("Could not access camera/mic");
+        devError('VideoCallView startCall', err);
+        trackFailure('media', 'video_call_start', err);
+        setError('Could not access camera or microphone. Check permissions and try again.');
       }
     };
 
@@ -175,24 +189,22 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
       }
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, []);
+  }, [callAttemptKey]);
 
   // Programmatically play AI video once call connects
   useEffect(() => {
     if (remoteVideoRef.current && !isCalling) {
       const playPromise = remoteVideoRef.current.play();
       if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          // Browsers may interrupt video playback for various reasons,
-          // such as the component unmounting. We should only log errors
-          // that are not the expected 'AbortError'.
-          if (error.name !== 'AbortError') {
-            console.error("AI video playback failed:", error);
-          }
+        playPromise.catch((error: Error & { name?: string }) => {
+          if (error?.name === 'AbortError') return;
+          devError('VideoCallView remote video play', error);
+          trackFailure('media', 'ai_video_playback', error);
+          setError('Partner video could not start. Try ending the call and starting again.');
         });
       }
     }
-  }, [isCalling]);
+  }, [isCalling, callAttemptKey]);
   
   // Audio visualizer effect
   useEffect(() => {
@@ -278,13 +290,24 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
     };
   }, [isCalling, deductTokens, onEnd]);
 
-  if (error && isCalling) { // Show error screen only if call failed to connect
+  if (error && isCalling) {
     return (
       <div className="relative h-full flex flex-col items-center justify-center p-8 text-center bg-black">
         <BackButton onClick={onEnd} className="absolute top-6 left-6" aria-label="Back to Chat" />
         <div className="text-4xl mb-4">⚠️</div>
-        <h2 className="text-xl font-bold mb-2">Something went wrong</h2>
-        <p className="text-zinc-500">{error}</p>
+        <h2 className="text-xl font-bold mb-2">Could not start call</h2>
+        <p className="text-zinc-400 max-w-sm">{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setIsCalling(true);
+            setCallAttemptKey((k) => k + 1);
+          }}
+          className="mt-6 rounded-full bg-pink-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-pink-500 active:scale-[0.98]"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -359,8 +382,21 @@ const VideoCallView: React.FC<VideoCallViewProps> = ({ partner, onEnd, deductTok
       ) : (
         <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-6">
           {error && (
-            <div className="bg-red-900/80 text-white backdrop-blur-md px-4 py-2 rounded-full border border-red-500 text-xs font-medium">
-              {error}
+            <div className="flex max-w-[min(100%,20rem)] flex-col items-center gap-2">
+              <div className="rounded-2xl border border-red-500/60 bg-red-900/85 px-4 py-2 text-center text-xs font-medium text-white backdrop-blur-md">
+                {error}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setIsCalling(true);
+                  setCallAttemptKey((k) => k + 1);
+                }}
+                className="rounded-full bg-white/15 px-4 py-1.5 text-xs font-bold text-white ring-1 ring-white/25 transition hover:bg-white/25 active:scale-[0.98]"
+              >
+                Try again
+              </button>
             </div>
           )}
           <div className="flex items-center gap-6">

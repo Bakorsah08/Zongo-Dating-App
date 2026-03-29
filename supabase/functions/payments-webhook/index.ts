@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { creditWalletFromVerifiedPayment, getServiceSupabase } from '../_shared/walletCredit.ts';
 
 type Json = Record<string, unknown>;
 
@@ -66,41 +66,25 @@ Deno.serve(async (req) => {
       return json(400, { ok: false, error: 'invalid_payload' });
     }
 
-    const supabase = createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-    const { error: insertEventErr } = await supabase.from('payment_webhook_events').insert({
-      provider_event_id: providerEventId,
-      payment_ref: paymentRef,
-      user_id: userId,
-      token_amount: tokenAmount,
-    });
-    if (insertEventErr) {
-      if (insertEventErr.code === '23505') {
-        return json(200, { ok: true, duplicate: true, provider_event_id: providerEventId });
-      }
-      console.error('payment_webhook_events insert error', insertEventErr);
-      return json(500, { ok: false, error: 'idempotency_write_failed' });
-    }
-
-    const { data, error } = await supabase.rpc('wallet_apply_delta', {
-      p_user_id: userId,
-      p_delta: tokenAmount,
-      p_kind: 'purchase_credit',
-      p_reference_id: paymentRef,
-      p_meta: {
-        source: 'payments-webhook',
-        actor_label: 'payments-webhook',
-        reason: 'payment_confirmed',
-        provider_event_id: providerEventId,
-      },
+    const supabase = getServiceSupabase(getEnv('SUPABASE_URL'), getEnv('SUPABASE_SERVICE_ROLE_KEY'));
+    const result = await creditWalletFromVerifiedPayment({
+      supabase,
+      userId,
+      tokenAmount,
+      paymentRef,
+      providerEventId,
+      provider: 'custom_hmac',
+      walletMeta: { rail: 'custom_hmac' },
     });
 
-    if (error) {
-      console.error('wallet_apply_delta error', error);
-      return json(500, { ok: false, error: 'wallet_apply_failed' });
+    if (!result.ok) {
+      return json(result.status, { ok: false, error: result.error });
+    }
+    if (result.duplicate) {
+      return json(200, { ok: true, duplicate: true, provider_event_id: providerEventId });
     }
 
-    return json(200, { ok: true, provider_event_id: providerEventId, result: data });
+    return json(200, { ok: true, provider_event_id: providerEventId, result: result.data });
   } catch (err) {
     console.error('payments-webhook fatal', err);
     return json(500, { ok: false, error: 'internal_error' });

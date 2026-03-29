@@ -1,7 +1,28 @@
 # Edge Function settings. Default JWT verification at the gateway is ON.
 # Disable only for endpoints called by external systems without a user token.
 
+[functions.wallet-action]
+verify_jwt = true
+
+[functions.admin-manage-roles]
+verify_jwt = true
+
+[functions.admin-review-cashout]
+verify_jwt = true
+
+[functions.admin-approve-ad]
+verify_jwt = true
+
 [functions.payments-webhook]
+verify_jwt = false
+
+[functions.create-stripe-checkout]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
 verify_jwt = false
 
 [functions.monitoring-ingest]

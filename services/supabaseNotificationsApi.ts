@@ -2,6 +2,7 @@ import type { AppNotification } from '../types';
 import type { AppNotificationRow } from '../models/supabase';
 import { SupabaseTable } from '../models/supabase';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 export function appNotificationFromRow(n: AppNotificationRow): AppNotification {
   const createdAt = new Date(n.created_at).getTime();
@@ -35,7 +36,7 @@ export async function fetchNotificationsForUser(userId: string): Promise<AppNoti
     .order('created_at', { ascending: false })
     .limit(100);
   if (error) {
-    console.error('fetchNotificationsForUser', error);
+    devError('fetchNotificationsForUser', error);
     return [];
   }
   return ((data ?? []) as AppNotificationRow[]).map(appNotificationFromRow);
@@ -49,7 +50,7 @@ export async function markAllNotificationsReadDb(userId: string): Promise<boolea
     .eq('recipient_id', userId)
     .eq('read', false);
   if (error) {
-    console.error('markAllNotificationsReadDb', error);
+    devError('markAllNotificationsReadDb', error);
     return false;
   }
   return true;
@@ -69,7 +70,7 @@ export async function insertSuperLikeNotificationDb(
     from_avatar: from.avatar || '',
   });
   if (error) {
-    console.error('insertSuperLikeNotificationDb', error);
+    devError('insertSuperLikeNotificationDb', error);
     return false;
   }
   return true;

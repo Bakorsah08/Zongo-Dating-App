@@ -1,6 +1,7 @@
 import { profileBadgeTierToApp, type ProfileRowPartial } from '../models/supabase';
 import type { BadgeTier, User, UserGender } from '../types';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
 
 export type { ProfileRow, ProfileRowPartial } from '../models/supabase';
 
@@ -39,7 +40,7 @@ export async function fetchMyProfile(userId: string, base: User): Promise<User |
   const supabase = getSupabase();
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
   if (error) {
-    console.error('fetchMyProfile', error);
+    devError('fetchMyProfile', error);
     return null;
   }
   if (!data) return null;
@@ -62,7 +63,7 @@ export async function ensureProfileRow(userId: string, email: string | undefined
     { onConflict: 'id' }
   );
   if (error) {
-    console.error('ensureProfileRow', error);
+    devError('ensureProfileRow', error);
     return false;
   }
   return true;
@@ -91,7 +92,7 @@ export async function updateMyProfile(userId: string, updates: Partial<User>): P
   if (Object.keys(patch).length === 0) return true;
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
   if (error) {
-    console.error('updateMyProfile', error);
+    devError('updateMyProfile', error);
     return false;
   }
   return true;

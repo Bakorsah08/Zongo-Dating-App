@@ -4,6 +4,8 @@ import type { User } from '../types';
 import type { Message } from '../types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { devError } from '../lib/devLog';
+import { toUserSafeMessage } from '../lib/userSafeError';
 import { profileRowToPublicUser } from './mapProfileToUser';
 import { getSignedChatMediaUrl } from './supabaseStorage';
 import { trackFailure, trackRealtimeStatus } from './monitoring';
@@ -44,7 +46,7 @@ export async function ensureMatchPair(userA: string, userB: string): Promise<boo
     user_high: hi,
   });
   if (error && error.code !== '23505') {
-    console.error('ensureMatchPair', error);
+    devError('ensureMatchPair', error);
     trackFailure('rpc', 'ensure_match_pair', error);
     return false;
   }
@@ -62,7 +64,7 @@ export async function getOrCreateConversation(userA: string, userB: string): Pro
     .eq('participant_b', hi)
     .maybeSingle();
   if (selErr) {
-    console.error('getOrCreateConversation select', selErr);
+    devError('getOrCreateConversation select', selErr);
     trackFailure('rpc', 'get_or_create_conversation_select', selErr);
     return null;
   }
@@ -74,26 +76,29 @@ export async function getOrCreateConversation(userA: string, userB: string): Pro
     .select('id')
     .single();
   if (insErr) {
-    console.error('getOrCreateConversation insert', insErr);
+    devError('getOrCreateConversation insert', insErr);
     trackFailure('rpc', 'get_or_create_conversation_insert', insErr);
     return null;
   }
   return inserted?.id as string;
 }
 
-export async function listMessages(conversationId: string): Promise<Message[]> {
-  if (!isSupabaseConfigured()) return [];
+export type ListMessagesResult = { messages: Message[]; error: string | null };
+
+export async function listMessages(conversationId: string): Promise<ListMessagesResult> {
+  if (!isSupabaseConfigured()) return { messages: [], error: null };
   const { data, error } = await getSupabase()
     .from(SupabaseTable.messages)
     .select('*')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
   if (error) {
-    console.error('listMessages', error);
+    devError('listMessages', error);
     trackFailure('rpc', 'list_messages', error);
-    return [];
+    return { messages: [], error: toUserSafeMessage(error) };
   }
-  return Promise.all(((data ?? []) as MessageRow[]).map(rowToMessage));
+  const messages = await Promise.all(((data ?? []) as MessageRow[]).map(rowToMessage));
+  return { messages, error: null };
 }
 
 export async function sendMessage(
@@ -116,7 +121,7 @@ export async function sendMessage(
     .select('*')
     .single();
   if (error) {
-    console.error('sendMessage', error);
+    devError('sendMessage', error);
     trackFailure('rpc', 'send_message', error);
     return null;
   }
@@ -132,7 +137,7 @@ export async function listInboxForUser(userId: string): Promise<InboxSummary[]> 
     .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
     .order('last_message_at', { ascending: false });
   if (cErr) {
-    console.error('listInboxForUser conversations', cErr);
+    devError('listInboxForUser conversations', cErr);
     trackFailure('rpc', 'list_inbox_conversations', cErr);
     return [];
   }
@@ -146,7 +151,7 @@ export async function listInboxForUser(userId: string): Promise<InboxSummary[]> 
     .in('conversation_id', convIds)
     .order('created_at', { ascending: false });
   if (mErr) {
-    console.error('listInboxForUser messages', mErr);
+    devError('listInboxForUser messages', mErr);
     trackFailure('rpc', 'list_inbox_messages', mErr);
     return [];
   }
@@ -162,7 +167,7 @@ export async function listInboxForUser(userId: string): Promise<InboxSummary[]> 
     .select('*')
     .in('id', uniqueOthers);
   if (pErr) {
-    console.error('listInboxForUser profiles', pErr);
+    devError('listInboxForUser profiles', pErr);
     trackFailure('rpc', 'list_inbox_profiles', pErr);
     return [];
   }

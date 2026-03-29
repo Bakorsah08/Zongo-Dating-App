@@ -7,12 +7,14 @@ import {
   UserGender,
   type AppNotification,
   type ExploreCarouselAd,
+  type TokenPackage,
   type UserAdSubmission,
 } from './types';
 import { getUsers, getBadges, getMonetizationSettings } from './data';
 import { adminStore } from './admin/store';
 import { getAppSession, setAppSession, setAppSessionGender, clearAppSession } from './appSession';
 import { isSupabaseConfigured, getSupabase } from './lib/supabaseClient';
+import { toUserSafeMessage } from './lib/userSafeError';
 import {
   fetchMyProfile,
   ensureProfileRow,
@@ -52,6 +54,8 @@ import { insertUserAdSubmissionDb, fetchUserAdSubmissionsFromDb } from './servic
 import { recordGiftEvent } from './services/supabaseGifts';
 import { uploadChatMedia as uploadChatMediaToStorage } from './services/supabaseStorage';
 import { trackFailure, trackRealtimeStatus } from './services/monitoring';
+import { fetchActiveTokenPackagesFromDb } from './services/supabaseTokenPackages';
+import { startWebTokenPurchase } from './services/payments';
 import type { AppNotificationRow } from './models/supabase';
 import DiscoverView from './components/DiscoverView';
 import LandingPage from './components/LandingPage';
@@ -100,27 +104,11 @@ const DEFAULT_ME: User = {
   badgeTier: 'none',
 };
 
-const getOAuthRedirectUrl = (): string => {
-  const appUrl = import.meta.env.VITE_APP_URL?.trim();
-  if (import.meta.env.PROD && appUrl) {
-    try {
-      const parsed = new URL(appUrl);
-      parsed.pathname = '/';
-      parsed.search = '';
-      parsed.hash = '';
-      return parsed.toString();
-    } catch {
-      // Invalid VITE_APP_URL should not block local fallback behavior.
-    }
-  }
-  return `${window.location.origin}/`;
-};
-
 const App: React.FC = () => {
   const supabaseEnabled = isSupabaseConfigured();
-  const prodRequiresSupabase = import.meta.env.PROD;
-  const mockAuthEnabled = !supabaseEnabled && !prodRequiresSupabase;
-  const failClosedSupabaseMisconfig = prodRequiresSupabase && !supabaseEnabled;
+  /** Dev-only: sign in without Supabase when env keys are absent (never in production builds). */
+  const devLocalMockAuth = import.meta.env.DEV && !supabaseEnabled;
+  const failClosedSupabaseMisconfig = import.meta.env.PROD && !supabaseEnabled;
   const [appSession, setAppSessionState] = useState<ReturnType<typeof getAppSession>>(getAppSession);
   const [sbSession, setSbSession] = useState<Session | null>(null);
   const [sbAuthResolved, setSbAuthResolved] = useState(!supabaseEnabled);
@@ -218,14 +206,14 @@ const App: React.FC = () => {
   }, [supabaseEnabled, sbSession?.user?.id]);
 
   const handleMockEmailAuth = (email: string, _password: string) => {
-    if (!mockAuthEnabled) return;
+    if (!devLocalMockAuth) return;
     setAppSession({ email });
     setAppSessionState(getAppSession());
   };
 
-  const handleMockGoogleAuth = () => {
-    if (!mockAuthEnabled) return;
-    setAppSession({ email: 'user@gmail.com' });
+  const handleMockAnonymousAuth = () => {
+    if (!devLocalMockAuth) return;
+    setAppSession({ email: 'guest@local.dev' });
     setAppSessionState(getAppSession());
   };
 
@@ -233,7 +221,7 @@ const App: React.FC = () => {
     if (supabaseEnabled && sbSession?.user?.id) {
       await updateProfileGender(sbSession.user.id, gender);
       setServerGender(gender);
-    } else if (mockAuthEnabled) {
+    } else if (devLocalMockAuth) {
       setAppSessionGender(gender);
       setAppSessionState(getAppSession());
     }
@@ -261,6 +249,7 @@ const App: React.FC = () => {
       setCloudDiscoverError(null);
       setCloudCarouselAds([]);
       setCloudUserAdSubmissions([]);
+      setChatThreadError(null);
     }
   };
 
@@ -288,12 +277,14 @@ const App: React.FC = () => {
   const [cloudDiscoverUsers, setCloudDiscoverUsers] = useState<User[]>([]);
   const [cloudDiscoverLoading, setCloudDiscoverLoading] = useState(false);
   const [cloudDiscoverError, setCloudDiscoverError] = useState<string | null>(null);
+  const [chatThreadError, setChatThreadError] = useState<string | null>(null);
   const [inboxSummaries, setInboxSummaries] = useState<InboxSummary[]>([]);
   const [activeCloudConversationId, setActiveCloudConversationId] = useState<string | null>(null);
   const [cloudNotifs, setCloudNotifs] = useState<AppNotification[]>([]);
   const [followingUsersCloud, setFollowingUsersCloud] = useState<User[]>([]);
   const [cloudCarouselAds, setCloudCarouselAds] = useState<ExploreCarouselAd[]>([]);
   const [cloudUserAdSubmissions, setCloudUserAdSubmissions] = useState<UserAdSubmission[]>([]);
+  const [cloudTokenPackages, setCloudTokenPackages] = useState<TokenPackage[]>([]);
   const [purchasePending, setPurchasePending] = useState(false);
   const [purchaseNotice, setPurchaseNotice] = useState<string | null>(null);
   const currentUserRef = useRef(state.currentUser);
@@ -319,6 +310,7 @@ const App: React.FC = () => {
         carouselAds,
         prefsRemote,
         adSubs,
+        tokenPkgs,
       ] = await Promise.all([
         bootstrapWallet(uid, starter),
         listFollowingIds(uid),
@@ -329,6 +321,7 @@ const App: React.FC = () => {
         fetchLiveCarouselAdsFromDb(),
         fetchUserPreferencesFromDb(uid),
         fetchUserAdSubmissionsFromDb(uid),
+        fetchActiveTokenPackagesFromDb().catch(() => []),
       ]);
       if (wallet) {
         setState((prev) => ({
@@ -352,6 +345,7 @@ const App: React.FC = () => {
       setCloudNotifs(notifs);
       setCloudCarouselAds(carouselAds);
       setCloudUserAdSubmissions(adSubs);
+      setCloudTokenPackages(tokenPkgs);
       let mergedPrefs = mergeUserPreferences(USER_PREFERENCES_DEFAULTS, prefsRemote ?? {});
       mergedPrefs = mergeUserPreferences(mergedPrefs, {
         privacy: { ...mergedPrefs.privacy, blockedUserIds: blocked },
@@ -359,7 +353,9 @@ const App: React.FC = () => {
       replaceUserPreferencesCache(mergedPrefs);
       setPrefsTick((t) => t + 1);
     } catch (e) {
-      setCloudDiscoverError(e instanceof Error ? e.message : 'Failed to load');
+      setCloudDiscoverError(
+        toUserSafeMessage(e, 'We could not load your data. Please try again.')
+      );
     } finally {
       setCloudDiscoverLoading(false);
     }
@@ -646,11 +642,17 @@ const App: React.FC = () => {
       let inboxPartners: User[] | null = null;
       if (supabaseEnabled && sbSession?.user?.id && !user.isAI) {
         const me = sbSession.user.id;
+        setChatThreadError(null);
         await ensureMatchPair(me, user.id);
         cid = await getOrCreateConversation(me, user.id);
+        if (!cid) {
+          setChatThreadError('Could not open a synced chat. Check your connection and try again.');
+        }
         const inbox = await listInboxForUser(me);
         setInboxSummaries(inbox);
         inboxPartners = inbox.map((x) => x.partner);
+      } else {
+        setChatThreadError(null);
       }
       setActiveCloudConversationId(cid);
       setState((prev) => {
@@ -744,24 +746,10 @@ const App: React.FC = () => {
     return false;
   };
 
+  /** Local / offline token credit (e.g. refunds in mock mode). With Supabase, prefer server wallet after purchases. */
   const addTokens = async (amount: number, priceUsd?: number) => {
     if (supabaseEnabled && sbSession?.user?.id) {
-      const before = state.tokens ?? 0;
-      setPurchasePending(true);
-      setPurchaseNotice('Payment submitted. Waiting for secure webhook confirmation to credit tokens.');
-      // In production this should open real checkout. For now we only poll wallet for webhook-applied credits.
-      for (let i = 0; i < 12; i += 1) {
-        await new Promise((r) => window.setTimeout(r, 2500));
-        const wallet = await fetchUserWallet(sbSession.user.id);
-        if (wallet && wallet.token_balance > before) {
-          setState((prev) => ({ ...prev, tokens: wallet.token_balance }));
-          setPurchaseNotice('Tokens credited from server confirmation.');
-          setPurchasePending(false);
-          return;
-        }
-      }
-      setPurchaseNotice('Still waiting for payment provider confirmation. Your tokens will appear automatically once confirmed.');
-      setPurchasePending(false);
+      setState((prev) => ({ ...prev, tokens: (prev.tokens ?? 0) + amount }));
       return;
     }
 
@@ -770,6 +758,102 @@ const App: React.FC = () => {
       adminStore.addPlatformRevenueFromTokenSales(priceUsd);
     }
   };
+
+  const purchaseTokenPackage = async (pkg: TokenPackage) => {
+    const priceUsd = parseFloat(pkg.price.replace(/[^0-9.]/g, '')) || 0;
+    if (!supabaseEnabled || !sbSession?.user?.id) {
+      await addTokens(pkg.tokens, priceUsd);
+      return;
+    }
+
+    setPurchasePending(true);
+    setPurchaseNotice(null);
+    try {
+      const snapshot = await fetchUserWallet(sbSession.user.id);
+      const beforeTokens = snapshot?.token_balance ?? state.tokens ?? 0;
+      sessionStorage.setItem(
+        'zongo_pending_checkout',
+        JSON.stringify({ userId: sbSession.user.id, beforeTokens })
+      );
+      const result = await startWebTokenPurchase(pkg.id);
+      if (result.errorMessage) {
+        setPurchaseNotice(toUserSafeMessage(result.errorMessage));
+        setPurchasePending(false);
+        sessionStorage.removeItem('zongo_pending_checkout');
+        return;
+      }
+      if (result.redirected) return;
+      setPurchasePending(false);
+      sessionStorage.removeItem('zongo_pending_checkout');
+    } catch (e) {
+      setPurchaseNotice(toUserSafeMessage(e, 'Checkout could not start. Try again.'));
+      setPurchasePending(false);
+      sessionStorage.removeItem('zongo_pending_checkout');
+    }
+  };
+
+  useEffect(() => {
+    const uid = sbSession?.user?.id;
+    if (!supabaseEnabled || !uid) return;
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get('checkout');
+    if (!checkout) return;
+
+    const cleanupUrl = () => {
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    };
+
+    if (checkout === 'cancel') {
+      cleanupUrl();
+      setPurchaseNotice('Checkout canceled.');
+      sessionStorage.removeItem('zongo_pending_checkout');
+      return;
+    }
+
+    if (checkout !== 'success') return;
+
+    let cancelled = false;
+    setPurchasePending(true);
+    setPurchaseNotice('Confirming your payment…');
+
+    (async () => {
+      const raw = sessionStorage.getItem('zongo_pending_checkout');
+      let beforeTokens = 0;
+      if (raw) {
+        try {
+          const o = JSON.parse(raw) as { beforeTokens?: number; userId?: string };
+          if (o.userId === uid && typeof o.beforeTokens === 'number') beforeTokens = o.beforeTokens;
+        } catch {
+          /* ignore */
+        }
+      }
+
+      for (let i = 0; i < 24; i += 1) {
+        if (cancelled) return;
+        await new Promise((r) => window.setTimeout(r, 2500));
+        const wallet = await fetchUserWallet(uid);
+        if (wallet && wallet.token_balance > beforeTokens) {
+          sessionStorage.removeItem('zongo_pending_checkout');
+          cleanupUrl();
+          setState((prev) => ({ ...prev, tokens: wallet.token_balance }));
+          setPurchaseNotice('Tokens added to your wallet.');
+          setPurchasePending(false);
+          return;
+        }
+      }
+      if (!cancelled) {
+        cleanupUrl();
+        setPurchaseNotice(
+          'If you completed payment, your balance will update shortly. You can reopen the Token Shop to refresh.'
+        );
+        setPurchasePending(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseEnabled, sbSession?.user?.id]);
 
   const handleSubmitUserAd = async (payload: {
     tierId: string;
@@ -890,7 +974,7 @@ const App: React.FC = () => {
     );
   }
 
-  const showLanding = supabaseEnabled ? !sbSession : mockAuthEnabled ? !appSession : true;
+  const showLanding = supabaseEnabled ? !sbSession : devLocalMockAuth ? !appSession : true;
   if (showLanding) {
     return (
       <div className="min-h-screen bg-white flex justify-center">
@@ -898,9 +982,6 @@ const App: React.FC = () => {
           <LandingPage
             onEmailAuth={async (email, password, mode) => {
               if (!supabaseEnabled) {
-                if (!mockAuthEnabled) {
-                  return { error: 'Production requires Supabase auth configuration.' };
-                }
                 handleMockEmailAuth(email, password);
                 return;
               }
@@ -925,19 +1006,16 @@ const App: React.FC = () => {
               }
               return undefined;
             }}
-            onGoogleAuth={async () => {
+            onAnonymousAuth={async () => {
               if (!supabaseEnabled) {
-                if (!mockAuthEnabled) {
-                  return { error: 'Production requires Supabase auth configuration.' };
-                }
-                handleMockGoogleAuth();
+                handleMockAnonymousAuth();
                 return;
               }
-              const { error } = await getSupabase().auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: getOAuthRedirectUrl() },
-              });
-              if (error) return { error: error.message };
+              const { error } = await getSupabase().auth.signInAnonymously();
+              if (error) {
+                trackFailure('auth', 'user_sign_in_anonymous', error, {});
+                return { error: error.message };
+              }
               return undefined;
             }}
           />
@@ -946,7 +1024,7 @@ const App: React.FC = () => {
     );
   }
 
-  const showGenderGate = supabaseEnabled ? !serverGender : mockAuthEnabled ? !appSession?.gender : false;
+  const showGenderGate = supabaseEnabled ? !serverGender : devLocalMockAuth ? !appSession?.gender : false;
   if (showGenderGate) {
     return (
       <div className="min-h-screen bg-white flex justify-center">
@@ -1077,7 +1155,12 @@ const App: React.FC = () => {
                 ? { conversationId: activeCloudConversationId, partnerIsAi: false }
                 : undefined
             }
-            onBack={() => setView(View.CHATS)}
+            onBack={() => {
+              setChatThreadError(null);
+              setView(View.CHATS);
+            }}
+            threadSetupError={chatThreadError}
+            onDismissThreadSetupError={() => setChatThreadError(null)}
             onVideoCall={() => setView(View.VIDEO_CALL)}
             onAudioCall={() => {
               const cost = getMonetizationSettings().videoCallTokens;
@@ -1205,9 +1288,10 @@ const App: React.FC = () => {
           <TokenShopView
             onBack={() => setView(View.EXPLORE)}
             currentTokens={state.tokens!}
-            onPurchase={addTokens}
+            onPurchase={purchaseTokenPackage}
             purchasePending={purchasePending}
             purchaseNotice={purchaseNotice}
+            packages={supabaseEnabled ? cloudTokenPackages : undefined}
           />
         );
       case View.PROFILE:

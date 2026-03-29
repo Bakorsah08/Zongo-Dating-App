@@ -19,6 +19,7 @@ import {
   DEFAULT_USER_AD_DURATION_TIERS,
 } from '../constants';
 import { addUserAdSystemNotification } from '../notificationsStore';
+import { devError } from '../lib/devLog';
 
 const STORAGE_KEY = 'zongo_admin_data';
 
@@ -230,7 +231,7 @@ function saveToStorage(data: AdminData) {
       window.dispatchEvent(new Event(ADMIN_DATA_CHANGED_EVENT));
     }
   } catch (e) {
-    console.error('Failed to save admin data:', e);
+    devError('Failed to save admin data', e);
   }
 }
 

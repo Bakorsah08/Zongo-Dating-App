@@ -3,6 +3,11 @@ import type { BadgeTier, User } from '../types';
 import { adminStore } from './store';
 import { broadcastAdminNotification } from '../notificationsStore';
 import { getBadges } from '../data';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
+import {
+  listBroadcastAudienceProfiles,
+  sendAdminBroadcastNotifications,
+} from '../services/supabaseAdminNotifications';
 
 type Audience = 'all' | 'selected' | 'group';
 type GroupMode = 'gender' | 'badge' | 'online';
@@ -17,14 +22,41 @@ const NotificationCentrePage: React.FC = () => {
   const [groupBadge, setGroupBadge] = useState<BadgeTier>('none');
   const [userSearch, setUserSearch] = useState('');
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const useCloudAudience = isSupabaseConfigured();
 
   const syncUsers = useCallback(() => {
     setUsers(adminStore.getUsers());
   }, []);
 
   useEffect(() => {
-    syncUsers();
-  }, [syncUsers]);
+    if (!useCloudAudience) {
+      syncUsers();
+      return;
+    }
+    let cancelled = false;
+    setAudienceLoading(true);
+    setAudienceError(null);
+    void listBroadcastAudienceProfiles()
+      .then((list) => {
+        if (!cancelled) setUsers(list);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setAudienceError(e instanceof Error ? e.message : 'Could not load member list.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAudienceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useCloudAudience, syncUsers]);
 
   const badges = getBadges();
 
@@ -72,7 +104,7 @@ const NotificationCentrePage: React.FC = () => {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = message.trim();
     if (!text) {
       window.alert('Enter a message.');
@@ -85,8 +117,26 @@ const NotificationCentrePage: React.FC = () => {
     }
     if (ids.length > 10 && !window.confirm(`Send to ${ids.length} users?`)) return;
 
-    const sent = broadcastAdminNotification(ids, text);
-    setLastResult(`Delivered to ${sent} user${sent === 1 ? '' : 's'}. They will see it as an unread notification in the app.`);
+    setSendError(null);
+    setLastResult(null);
+
+    if (useCloudAudience) {
+      setSending(true);
+      const result = await sendAdminBroadcastNotifications(text, ids);
+      setSending(false);
+      if (result.ok === false) {
+        setSendError(result.error);
+        return;
+      }
+      setLastResult(
+        `Delivered to ${result.sent} user${result.sent === 1 ? '' : 's'}. They will see it in the app notification bell (realtime when online).`
+      );
+    } else {
+      const sent = broadcastAdminNotification(ids, text);
+      setLastResult(
+        `Saved for ${sent} user${sent === 1 ? '' : 's'} in this browser only (demo data). Configure Supabase to reach real members.`
+      );
+    }
     setMessage('');
     if (audience === 'selected') setSelectedIds(new Set());
   };
@@ -96,7 +146,8 @@ const NotificationCentrePage: React.FC = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Notification centre</h1>
         <p className="text-zinc-500 mt-1">
-          Send an in-app message to app users. It appears in their notification bell as unread until they open it.
+          Send an in-app message to members. With Supabase enabled, deliveries are stored in the database and show in each
+          user&apos;s notification bell; otherwise messages are saved only in this browser (demo).
         </p>
       </div>
 
@@ -114,6 +165,15 @@ const NotificationCentrePage: React.FC = () => {
 
         <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Audience</h2>
+
+          {audienceLoading ? (
+            <p className="text-sm text-zinc-500">Loading members from the database…</p>
+          ) : null}
+          {audienceError ? (
+            <p className="text-sm text-red-400 font-medium rounded-xl border border-red-500/30 px-4 py-3 bg-red-500/10 break-words">
+              {audienceError}
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap gap-3">
             {(
@@ -269,13 +329,19 @@ const NotificationCentrePage: React.FC = () => {
           </p>
           <button
             type="button"
-            onClick={handleSend}
-            disabled={!message.trim() || previewCount === 0}
+            onClick={() => void handleSend()}
+            disabled={!message.trim() || previewCount === 0 || sending || audienceLoading || !!audienceError}
             className="px-8 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-sm"
           >
-            Send notification
+            {sending ? 'Sending…' : 'Send notification'}
           </button>
         </div>
+
+        {sendError ? (
+          <p className="text-sm text-red-400 font-medium border border-red-500/30 px-4 py-3 bg-red-500/10 break-words">
+            {sendError}
+          </p>
+        ) : null}
 
         {lastResult ? (
           <p className="text-sm text-emerald-400 font-medium border border-emerald-500/30 rounded-xl px-4 py-3 bg-emerald-500/10">

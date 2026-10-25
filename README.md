@@ -19,6 +19,10 @@ View your app in AI Studio: https://ai.studio/apps/drive/1sVlZV6_YCz06Nk1KwKlMeM
 3. Run the app:
    `npm run dev`
 
+## Manual setup
+
+Dashboard steps, secrets and environment variables you have to set by hand (Stripe, Paystack / mobile money, RevenueCat, token packages) are listed in [MANUAL_SETUP.md](MANUAL_SETUP.md).
+
 ## Apply Supabase migrations
 
 1. Make sure `.env.local` contains `VITE_SUPABASE_URL` for your project.

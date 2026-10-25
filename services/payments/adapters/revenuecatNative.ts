@@ -1,14 +1,32 @@
+import { purchaseRevenueCatProduct } from '../../revenuecat/client';
 import type { TokenCheckoutResult } from '../types';
 
 /**
- * Mobile (iOS / Android) token purchases go through RevenueCat + store billing.
- * Call `Purchases.purchasePackage()` from React Native and ensure `appUserID` is the Supabase user id
- * so `revenuecat-webhook` can credit the wallet. This web stub keeps a single registry entry point.
+ * Mobile (iOS / Android) token purchases via RevenueCat + store billing.
+ * Wallet credit is applied server-side by revenuecat-webhook after purchase.
  */
-export async function startRevenueCatNativePurchase(_packageId: string): Promise<TokenCheckoutResult> {
-  return {
-    redirected: false,
-    errorMessage:
-      'In-app purchases run in the iOS or Android app. On the web, token checkout uses Stripe.',
-  };
+export async function startRevenueCatNativePurchase(
+  _packageId: string,
+  revenuecatProductId?: string | null
+): Promise<TokenCheckoutResult> {
+  if (!revenuecatProductId?.trim()) {
+    return {
+      redirected: false,
+      purchaseCompleted: false,
+      errorMessage:
+        'This token package has no App Store / Play product id. Add it in Admin → Token Packages.',
+    };
+  }
+
+  const result = await purchaseRevenueCatProduct(revenuecatProductId);
+  if (result.ok === false) {
+    return {
+      redirected: false,
+      purchaseCompleted: false,
+      errorMessage: result.message,
+      userCancelled: result.cancelled,
+    };
+  }
+
+  return { redirected: false, purchaseCompleted: true };
 }

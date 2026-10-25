@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { User } from '../types';
 import { getBadges, getMonetizationSettings } from '../data';
+import { getUserMoodDisplay } from '../userMoods';
 import BackButton from './BackButton';
 
 interface UserDetailViewProps {
@@ -182,11 +183,6 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <h1 className="text-3xl font-black text-zinc-900">{user.name}, {user.age}</h1>
               {user.isAI && <span className="text-xs font-bold bg-pink-600 text-white px-2 py-1 rounded-full">🤖 AI</span>}
-              {user.badgeTier && user.badgeTier !== 'none' && (
-                <span className="shrink-0 text-2xl" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
-                  {getBadges().find(b => b.id === user.badgeTier)?.icon}
-                </span>
-              )}
             </div>
             {!user.isLive && !user.isAI && (
               <button
@@ -203,6 +199,21 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({
             )}
           </div>
           <p className="text-zinc-600 mt-1 text-sm">📍 {user.location}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-800">
+              <span aria-hidden>{getUserMoodDisplay(user.mood).icon}</span>
+              {getUserMoodDisplay(user.mood).label}
+            </span>
+            {user.badgeTier && user.badgeTier !== 'none' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-amber-900"
+                title={getBadges().find((b) => b.id === user.badgeTier)?.name}
+              >
+                <span aria-hidden>{getBadges().find((b) => b.id === user.badgeTier)?.icon}</span>
+                VIP
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Bio */}

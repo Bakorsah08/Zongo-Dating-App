@@ -55,11 +55,34 @@ import { recordGiftEvent } from './services/supabaseGifts';
 import { uploadChatMedia as uploadChatMediaToStorage } from './services/supabaseStorage';
 import { trackFailure, trackRealtimeStatus } from './services/monitoring';
 import { fetchActiveTokenPackagesFromDb } from './services/supabaseTokenPackages';
-import { startWebTokenPurchase } from './services/payments';
+import {
+  getWebPaymentMethods,
+  pollWalletBalanceIncrease,
+  startTokenPurchase,
+  type WebPaymentMethod,
+} from './services/payments';
+import {
+  configureRevenueCatIfNeeded,
+  revenueCatLogIn,
+  revenueCatLogOut,
+} from './services/revenuecat/client';
+import { isNativeApp } from './lib/platform';
 import type { AppNotificationRow } from './models/supabase';
 import DiscoverView from './components/DiscoverView';
 import LandingPage from './components/LandingPage';
 import GenderSelectPage from './components/GenderSelectPage';
+import AgeGatePage from './components/AgeGatePage';
+import ReportUserSheet from './components/ReportUserSheet';
+import {
+  deleteMyAccount,
+  fetchHasVerifiedAge,
+  isDeviceMarkedUnderage,
+  markDeviceUnderage,
+  submitBirthdate,
+  submitUserReport,
+  type ReportContext,
+  type ReportReason,
+} from './services/supabaseSafety';
 import ChatListView, { type ChatInboxRow } from './components/ChatListView';
 import ChatRoomView from './components/ChatRoomView';
 import VideoCallView from './components/VideoCallView';
@@ -102,6 +125,7 @@ const DEFAULT_ME: User = {
   earnings: 0,
   transferredOut: 0,
   badgeTier: 'none',
+  mood: 'neutral',
 };
 
 const App: React.FC = () => {
@@ -113,7 +137,12 @@ const App: React.FC = () => {
   const [sbSession, setSbSession] = useState<Session | null>(null);
   const [sbAuthResolved, setSbAuthResolved] = useState(!supabaseEnabled);
   const [sbProfileResolved, setSbProfileResolved] = useState(!supabaseEnabled);
+  const profileLoadGenRef = useRef(0);
   const [serverGender, setServerGender] = useState<UserGender | null>(null);
+  /** 18+ age gate: false until the signed-in user has a verified birthdate. */
+  const [ageVerified, setAgeVerified] = useState(false);
+  /** Shown after sign-out when an under-18 birthdate was entered. */
+  const [underageNotice, setUnderageNotice] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [scrollEndTimer, setScrollEndTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
@@ -124,23 +153,33 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!supabaseEnabled) return;
     const sb = getSupabase();
-    sb.auth.getSession().then(({ data: { session } }) => {
-      setSbSession(session);
-      setSbAuthResolved(true);
-    });
+    const resolveAuth = () => setSbAuthResolved(true);
+    const authTimeout = window.setTimeout(resolveAuth, 10_000);
+    void sb.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSbSession(session);
+        resolveAuth();
+      })
+      .catch(() => resolveAuth());
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((_event, session) => {
       setSbSession(session);
+      resolveAuth();
       if (!session) {
         setServerGender(null);
+        setAgeVerified(false);
         setSbProfileResolved(true);
       }
       // Do not set sbProfileResolved(false) here: TOKEN_REFRESHED re-fires this callback
       // with the same user id, and the profile effect does not re-run — leaving the app
       // stuck on "Signing you in…" forever. Profile loading toggles that flag instead.
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(authTimeout);
+      subscription.unsubscribe();
+    };
   }, [supabaseEnabled]);
 
   useEffect(() => {
@@ -149,18 +188,39 @@ const App: React.FC = () => {
       setSbProfileResolved(true);
       return;
     }
-    let cancelled = false;
+    const gen = ++profileLoadGenRef.current;
+    const uid = sbSession.user.id;
+    const email = sbSession.user.email ?? undefined;
+    const fallbackName = email?.split('@')[0] || 'Member';
     setSbProfileResolved(false);
+
+    const applyFallbackUser = () => {
+      setState((prev) => ({
+        ...prev,
+        currentUser: {
+          ...prev.currentUser,
+          id: uid,
+          name: fallbackName,
+        },
+      }));
+      setServerGender(null);
+    };
+
+    const profileTimeout = window.setTimeout(() => {
+      if (profileLoadGenRef.current !== gen) return;
+      applyFallbackUser();
+      setSbProfileResolved(true);
+    }, 12_000);
+
     (async () => {
-      const uid = sbSession.user.id;
-      const email = sbSession.user.email ?? undefined;
       try {
+        const ageCheck = fetchHasVerifiedAge(uid);
         let merged = await fetchMyProfile(uid, DEFAULT_ME);
         if (!merged) {
           await ensureProfileRow(uid, email);
           merged = await fetchMyProfile(uid, DEFAULT_ME);
         }
-        if (cancelled) return;
+        if (profileLoadGenRef.current !== gen) return;
         if (merged) {
           setState((prev) => {
             const nextUser = { ...DEFAULT_ME, ...merged };
@@ -174,34 +234,20 @@ const App: React.FC = () => {
           });
           setServerGender(merged.gender ?? null);
         } else {
-          setState((prev) => ({
-            ...prev,
-            currentUser: {
-              ...prev.currentUser,
-              id: uid,
-              name: email?.split('@')[0] || 'Member',
-            },
-          }));
-          setServerGender(null);
+          applyFallbackUser();
         }
+        const verified = await ageCheck;
+        if (profileLoadGenRef.current === gen) setAgeVerified(verified);
       } catch {
-        if (!cancelled) {
-          setState((prev) => ({
-            ...prev,
-            currentUser: {
-              ...prev.currentUser,
-              id: uid,
-              name: email?.split('@')[0] || 'Member',
-            },
-          }));
-          setServerGender(null);
-        }
+        if (profileLoadGenRef.current === gen) applyFallbackUser();
       } finally {
-        if (!cancelled) setSbProfileResolved(true);
+        window.clearTimeout(profileTimeout);
+        if (profileLoadGenRef.current === gen) setSbProfileResolved(true);
       }
     })();
+
     return () => {
-      cancelled = true;
+      window.clearTimeout(profileTimeout);
     };
   }, [supabaseEnabled, sbSession?.user?.id]);
 
@@ -227,7 +273,33 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBirthdateSubmit = async (birthdate: string): Promise<string | void> => {
+    const uid = sbSession?.user?.id;
+    if (!uid) return 'You are signed out. Please sign in again.';
+    const res = await submitBirthdate(uid, birthdate);
+    if (res.ok === false) {
+      if (res.error === 'must_be_18') {
+        handleUnderage();
+        return;
+      }
+      if (res.error === 'invalid_birthdate') return 'Enter a valid date of birth.';
+      return 'Could not save your date of birth. Check your connection and try again.';
+    }
+    setAgeVerified(true);
+    const profile = await fetchMyProfile(uid, DEFAULT_ME);
+    if (profile) {
+      setState((prev) => ({ ...prev, currentUser: { ...prev.currentUser, age: profile.age } }));
+    }
+  };
+
+  const handleUnderage = () => {
+    markDeviceUnderage();
+    setUnderageNotice(true);
+    void handleAppLogout();
+  };
+
   const handleAppLogout = async () => {
+    void revenueCatLogOut();
     clearAppSession();
     setAppSessionState(null);
     if (supabaseEnabled) {
@@ -237,10 +309,20 @@ const App: React.FC = () => {
       const meUser = users.find((u) => u.id === 'me');
       const currentUser = meUser ? { ...DEFAULT_ME, ...meUser } : DEFAULT_ME;
       if (!meUser) adminStore.addUser(currentUser);
+      setIsHomeMenuOpen(false);
+      setActiveCloudConversationId(null);
       setState((prev) => ({
         ...prev,
         currentUser,
         matches: users.filter((u) => u.id !== 'me').slice(0, 2),
+        followingIds: [],
+        currentView: View.EXPLORE,
+        selectedChatPartner: undefined,
+        selectedLiveHost: undefined,
+        selectedUserForDetail: undefined,
+        profileReturnView: undefined,
+        liveStreamParticipants: undefined,
+        liveHostBroadcastMedia: undefined,
       }));
       setCloudDiscoverUsers([]);
       setInboxSummaries([]);
@@ -292,6 +374,28 @@ const App: React.FC = () => {
   const prefsUidRef = useRef<string | undefined>(undefined);
   prefsUidRef.current = sbSession?.user?.id;
   const prevViewRef = useRef<View>(state.currentView);
+  const prevShowLandingRef = useRef<boolean | null>(null);
+
+  /** After sign-in (leaving landing), always open the home / Explore feed. */
+  useEffect(() => {
+    const showLanding = supabaseEnabled ? !sbSession : devLocalMockAuth ? !appSession : true;
+    const prev = prevShowLandingRef.current;
+    if (prev === true && showLanding === false) {
+      setIsHomeMenuOpen(false);
+      setActiveCloudConversationId(null);
+      setState((prevState) => ({
+        ...prevState,
+        currentView: View.EXPLORE,
+        selectedChatPartner: undefined,
+        selectedLiveHost: undefined,
+        selectedUserForDetail: undefined,
+        profileReturnView: undefined,
+        liveStreamParticipants: undefined,
+        liveHostBroadcastMedia: undefined,
+      }));
+    }
+    prevShowLandingRef.current = showLanding;
+  }, [supabaseEnabled, sbSession, devLocalMockAuth, appSession]);
 
   const loadCloudData = useCallback(async () => {
     if (!supabaseEnabled || !sbSession?.user?.id || !sbProfileResolved) return;
@@ -566,6 +670,53 @@ const App: React.FC = () => {
     [state.currentUser?.id, userAdSubmissionsTick, supabaseEnabled, cloudUserAdSubmissions]
   );
 
+  const [reportTarget, setReportTarget] = useState<{ id: string; name: string; context: ReportContext } | null>(null);
+
+  /** Block a member and drop them from matches / following; leaves their profile if it's open. */
+  const blockUserAndLeaveProfile = (id: string) => {
+    if (supabaseEnabled && sbSession?.user?.id) {
+      void addBlock(sbSession.user.id, id);
+    }
+    addBlockedUserId(id);
+    setBlockedUserIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setState((prev) => ({
+      ...prev,
+      matches: prev.matches.filter((m) => m.id !== id),
+      followingIds: prev.followingIds.filter((x) => x !== id),
+      ...(prev.selectedUserForDetail?.id === id
+        ? { currentView: prev.profileReturnView ?? View.EXPLORE, selectedUserForDetail: undefined }
+        : {}),
+    }));
+  };
+
+  const handleSubmitReport = async (input: {
+    reason: ReportReason;
+    details: string;
+    alsoBlock: boolean;
+  }): Promise<string | void> => {
+    const target = reportTarget;
+    if (!target) return;
+    if (supabaseEnabled && sbSession?.user?.id) {
+      const res = await submitUserReport({
+        reporterId: sbSession.user.id,
+        reportedId: target.id,
+        reason: input.reason,
+        details: input.details,
+        context: target.context,
+      });
+      if (res.ok === false) return res.error;
+    }
+    if (input.alsoBlock) blockUserAndLeaveProfile(target.id);
+  };
+
+  const handleDeleteAccount = async (): Promise<string | void> => {
+    const res = await deleteMyAccount();
+    if (res.ok === false) return res.error;
+    // The auth user no longer exists, so only clear the local session.
+    await getSupabase().auth.signOut({ scope: 'local' }).catch(() => undefined);
+    await handleAppLogout();
+  };
+
   const handleUnblockUser = useCallback(
     (userId: string) => {
       if (supabaseEnabled && sbSession?.user?.id) {
@@ -759,30 +910,58 @@ const App: React.FC = () => {
     }
   };
 
-  const purchaseTokenPackage = async (pkg: TokenPackage) => {
+  const purchaseTokenPackage = async (pkg: TokenPackage, method?: WebPaymentMethod) => {
     const priceUsd = parseFloat(pkg.price.replace(/[^0-9.]/g, '')) || 0;
     if (!supabaseEnabled || !sbSession?.user?.id) {
       await addTokens(pkg.tokens, priceUsd);
       return;
     }
 
+    const uid = sbSession.user.id;
     setPurchasePending(true);
     setPurchaseNotice(null);
     try {
-      const snapshot = await fetchUserWallet(sbSession.user.id);
+      const snapshot = await fetchUserWallet(uid);
       const beforeTokens = snapshot?.token_balance ?? state.tokens ?? 0;
-      sessionStorage.setItem(
-        'zongo_pending_checkout',
-        JSON.stringify({ userId: sbSession.user.id, beforeTokens })
-      );
-      const result = await startWebTokenPurchase(pkg.id);
+      if (!isNativeApp()) {
+        sessionStorage.setItem(
+          'zongo_pending_checkout',
+          JSON.stringify({ userId: uid, beforeTokens })
+        );
+      }
+      const result = await startTokenPurchase({
+        packageId: pkg.id,
+        revenuecatProductId: pkg.revenuecatProductId,
+        method,
+      });
       if (result.errorMessage) {
-        setPurchaseNotice(toUserSafeMessage(result.errorMessage));
+        if (!result.userCancelled) {
+          setPurchaseNotice(toUserSafeMessage(result.errorMessage));
+        }
         setPurchasePending(false);
         sessionStorage.removeItem('zongo_pending_checkout');
         return;
       }
       if (result.redirected) return;
+
+      if (result.purchaseCompleted) {
+        setPurchaseNotice('Confirming your purchase…');
+        const credited = await pollWalletBalanceIncrease(uid, beforeTokens);
+        if (credited) {
+          const wallet = await fetchUserWallet(uid);
+          if (wallet) {
+            setState((prev) => ({ ...prev, tokens: wallet.token_balance }));
+          }
+          setPurchaseNotice('Tokens added to your wallet.');
+        } else {
+          setPurchaseNotice(
+            'Purchase completed. Your balance will update shortly — reopen the Token Shop to refresh.'
+          );
+        }
+        setPurchasePending(false);
+        return;
+      }
+
       setPurchasePending(false);
       sessionStorage.removeItem('zongo_pending_checkout');
     } catch (e) {
@@ -791,6 +970,17 @@ const App: React.FC = () => {
       sessionStorage.removeItem('zongo_pending_checkout');
     }
   };
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    void configureRevenueCatIfNeeded();
+  }, []);
+
+  useEffect(() => {
+    const uid = sbSession?.user?.id;
+    if (!uid || !isNativeApp()) return;
+    void revenueCatLogIn(uid);
+  }, [sbSession?.user?.id]);
 
   useEffect(() => {
     const uid = sbSession?.user?.id;
@@ -828,18 +1018,18 @@ const App: React.FC = () => {
         }
       }
 
-      for (let i = 0; i < 24; i += 1) {
-        if (cancelled) return;
-        await new Promise((r) => window.setTimeout(r, 2500));
+      const credited = await pollWalletBalanceIncrease(uid, beforeTokens);
+      if (cancelled) return;
+      if (credited) {
         const wallet = await fetchUserWallet(uid);
-        if (wallet && wallet.token_balance > beforeTokens) {
-          sessionStorage.removeItem('zongo_pending_checkout');
-          cleanupUrl();
+        sessionStorage.removeItem('zongo_pending_checkout');
+        cleanupUrl();
+        if (wallet) {
           setState((prev) => ({ ...prev, tokens: wallet.token_balance }));
-          setPurchaseNotice('Tokens added to your wallet.');
-          setPurchasePending(false);
-          return;
         }
+        setPurchaseNotice('Tokens added to your wallet.');
+        setPurchasePending(false);
+        return;
       }
       if (!cancelled) {
         cleanupUrl();
@@ -950,7 +1140,8 @@ const App: React.FC = () => {
   }
 
   const waitingSupabaseBootstrap =
-    supabaseEnabled && (!sbAuthResolved || (sbSession !== null && !sbProfileResolved));
+    supabaseEnabled &&
+    (!sbAuthResolved || (Boolean(sbSession?.user) && !sbProfileResolved));
 
   if (waitingSupabaseBootstrap) {
     return (
@@ -974,6 +1165,21 @@ const App: React.FC = () => {
     );
   }
 
+  if (underageNotice) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex justify-center">
+        <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
+          <AgeGatePage
+            blocked
+            onSubmit={async () => undefined}
+            onUnderage={() => undefined}
+            onSignOut={() => setUnderageNotice(false)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const showLanding = supabaseEnabled ? !sbSession : devLocalMockAuth ? !appSession : true;
   if (showLanding) {
     return (
@@ -990,7 +1196,7 @@ const App: React.FC = () => {
                 const { data, error } = await sb.auth.signUp({ email, password });
                 if (error) {
                   trackFailure('auth', 'user_sign_up', error, { emailDomain: email.split('@')[1] || 'unknown' });
-                  return { error: error.message };
+                  return { error: toUserSafeMessage(error) };
                 }
                 if (data.user && !data.session) {
                   return {
@@ -1002,7 +1208,7 @@ const App: React.FC = () => {
               const { error } = await sb.auth.signInWithPassword({ email, password });
               if (error) {
                 trackFailure('auth', 'user_sign_in', error, { emailDomain: email.split('@')[1] || 'unknown' });
-                return { error: error.message };
+                return { error: toUserSafeMessage(error) };
               }
               return undefined;
             }}
@@ -1014,10 +1220,25 @@ const App: React.FC = () => {
               const { error } = await getSupabase().auth.signInAnonymously();
               if (error) {
                 trackFailure('auth', 'user_sign_in_anonymous', error, {});
-                return { error: error.message };
+                return { error: toUserSafeMessage(error) };
               }
               return undefined;
             }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (supabaseEnabled && !ageVerified) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex justify-center">
+        <div className="w-full max-w-md min-h-[100dvh] mx-auto relative overflow-hidden">
+          <AgeGatePage
+            blocked={isDeviceMarkedUnderage()}
+            onSubmit={handleBirthdateSubmit}
+            onUnderage={handleUnderage}
+            onSignOut={() => void handleAppLogout()}
           />
         </div>
       </div>
@@ -1042,7 +1263,9 @@ const App: React.FC = () => {
   const isVideoCall = state.currentView === View.VIDEO_CALL;
   const fullBleedMain = isLiveView || isChatRoom || isVideoCall;
   const showNotificationBell =
-    !fullBleedMain && state.currentView !== View.USER_DETAIL;
+    !fullBleedMain &&
+    state.currentView !== View.USER_DETAIL &&
+    state.currentView !== View.EXPLORE;
 
   const renderView = () => {
     switch (state.currentView) {
@@ -1051,6 +1274,10 @@ const App: React.FC = () => {
           <DiscoverView
             userGender={exploreGender}
             currentUserId={state.currentUser.id}
+            currentUser={state.currentUser}
+            tokens={state.tokens ?? 0}
+            onGoShop={() => setView(View.TOKEN_SHOP)}
+            onOpenProfile={() => setView(View.PROFILE)}
             onSelectUser={openUserDetail}
             onSelectLive={openLive}
             onGoLive={() => setView(View.HOST_LIVE)}
@@ -1292,6 +1519,8 @@ const App: React.FC = () => {
             purchasePending={purchasePending}
             purchaseNotice={purchaseNotice}
             packages={supabaseEnabled ? cloudTokenPackages : undefined}
+            isNativeCheckout={isNativeApp()}
+            paymentMethods={supabaseEnabled ? getWebPaymentMethods() : undefined}
           />
         );
       case View.PROFILE:
@@ -1316,6 +1545,7 @@ const App: React.FC = () => {
             onSubmitUserAd={handleSubmitUserAd}
             userAdSubmissions={userAdSubmissions}
             onUnblockUser={handleUnblockUser}
+            onDeleteAccount={supabaseEnabled ? handleDeleteAccount : undefined}
           />
         );
       case View.USER_DETAIL:
@@ -1345,30 +1575,8 @@ const App: React.FC = () => {
                 });
               }
             }}
-            onReport={() => {
-              window.alert("Thanks — we'll review your report.");
-            }}
-            onBlock={() => {
-              const id = state.selectedUserForDetail?.id;
-              if (id) {
-                if (supabaseEnabled && sbSession?.user?.id) {
-                  void addBlock(sbSession.user.id, id);
-                }
-                addBlockedUserId(id);
-                setBlockedUserIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-              }
-              setState((prev) => {
-                const bid = prev.selectedUserForDetail?.id;
-                if (!bid) return prev;
-                return {
-                  ...prev,
-                  matches: prev.matches.filter((m) => m.id !== bid),
-                  followingIds: prev.followingIds.filter((x) => x !== bid),
-                  currentView: prev.profileReturnView ?? View.EXPLORE,
-                  selectedUserForDetail: undefined,
-                };
-              });
-            }}
+            onReport={(u) => setReportTarget({ id: u.id, name: u.name, context: 'profile' })}
+            onBlock={(u) => blockUserAndLeaveProfile(u.id)}
           />
         ) : null;
       case View.CASH_OUT:
@@ -1381,6 +1589,10 @@ const App: React.FC = () => {
           <DiscoverView
             userGender={exploreGender}
             currentUserId={state.currentUser.id}
+            currentUser={state.currentUser}
+            tokens={state.tokens ?? 0}
+            onGoShop={() => setView(View.TOKEN_SHOP)}
+            onOpenProfile={() => setView(View.PROFILE)}
             onSelectUser={openUserDetail}
             onSelectLive={openLive}
             onGoLive={() => setView(View.HOST_LIVE)}
@@ -1432,7 +1644,17 @@ const App: React.FC = () => {
         tokenCount={state.tokens}
         liveStreamingEnabled={getMonetizationSettings().liveStreamingEnabled}
         hidden={isScrolling || isLiveView || isChatRoom || isVideoCall}
+        viewerGender={exploreGender}
       />
+
+      {reportTarget ? (
+        <ReportUserSheet
+          key={reportTarget.id}
+          userName={reportTarget.name}
+          onClose={() => setReportTarget(null)}
+          onSubmit={handleSubmitReport}
+        />
+      ) : null}
     </div>
   );
 };

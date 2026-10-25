@@ -17,7 +17,98 @@ interface ProfileSettingsSheetsProps {
   onPreferencesChanged: () => void;
   /** Unblock on server (e.g. Supabase `user_blocks`) when provided. */
   onUnblockUser?: (userId: string) => void;
+  /** Shown under Privacy & safety when provided; resolves with an error message on failure. */
+  onDeleteAccount?: () => Promise<string | void>;
+  /** Shown in the deletion warning so people know what they lose. */
+  tokenBalance?: number;
 }
+
+const DeleteAccountSection: React.FC<{
+  onDeleteAccount: () => Promise<string | void>;
+  tokenBalance: number;
+}> = ({ onDeleteAccount, tokenBalance }) => {
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDelete = async () => {
+    setBusy(true);
+    setError('');
+    const message = await onDeleteAccount();
+    setBusy(false);
+    if (message) setError(message);
+  };
+
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Delete account</h3>
+      {!confirming ? (
+        <>
+          <p className="mb-3 text-sm text-zinc-600">
+            Permanently delete your profile, photos, matches, messages and token balance.
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="w-full min-h-[48px] rounded-2xl border border-red-200 bg-red-50 text-sm font-bold text-red-600 [-webkit-tap-highlight-color:transparent]"
+          >
+            Delete my account
+          </button>
+        </>
+      ) : (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-700">This can&apos;t be undone.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700/90">
+            <li>Your profile, photos, matches and messages are deleted.</li>
+            {tokenBalance > 0 ? (
+              <li>Your {tokenBalance} tokens are lost and can&apos;t be refunded.</li>
+            ) : null}
+            <li>App Store or Google Play subscriptions are managed in your store account, not here.</li>
+          </ul>
+          <label htmlFor="delete-account-confirm" className="mt-4 mb-2 block text-xs font-bold text-red-700">
+            Type DELETE to confirm
+          </label>
+          <input
+            id="delete-account-confirm"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            autoCapitalize="characters"
+            autoComplete="off"
+            className="w-full min-h-[44px] rounded-xl border border-red-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          {error ? (
+            <p className="mt-2 text-sm text-red-700" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="mt-4 flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                setTyped('');
+                setError('');
+              }}
+              disabled={busy}
+              className="flex-1 min-h-[44px] rounded-xl border border-zinc-200 bg-white text-sm font-semibold text-zinc-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              disabled={busy || typed.trim().toUpperCase() !== 'DELETE'}
+              className="flex-1 min-h-[44px] rounded-xl bg-red-600 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {busy ? 'Deleting…' : 'Delete forever'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const toggleRowClass =
   'flex w-full items-center justify-between gap-4 border-b border-zinc-100 py-4 last:border-0';
@@ -28,6 +119,8 @@ const ProfileSettingsSheets: React.FC<ProfileSettingsSheetsProps> = ({
   onNavigateToExploreFilters,
   onPreferencesChanged,
   onUnblockUser,
+  onDeleteAccount,
+  tokenBalance = 0,
 }) => {
   const [superLike, setSuperLike] = useState(true);
   const [system, setSystem] = useState(true);
@@ -211,6 +304,10 @@ const ProfileSettingsSheets: React.FC<ProfileSettingsSheetsProps> = ({
                 </ul>
               )}
             </div>
+
+            {onDeleteAccount ? (
+              <DeleteAccountSection onDeleteAccount={onDeleteAccount} tokenBalance={tokenBalance} />
+            ) : null}
           </div>
         )}
 

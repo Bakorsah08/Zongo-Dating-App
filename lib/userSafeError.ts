@@ -18,6 +18,9 @@ export function toUserSafeMessage(
   }
   raw = raw.trim();
   if (!raw || raw.length > 200) return fallback;
+  if (/failed to fetch/i.test(raw)) {
+    return 'Cannot reach Supabase (project may be paused). Run npm run supabase:restore or restore the project in your Supabase dashboard, then try again.';
+  }
   if (INTERNAL_HINTS.test(raw)) return fallback;
   return raw;
 }

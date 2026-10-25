@@ -1,6 +1,7 @@
 import type { ProfileRowPartial } from '../models/supabase';
 import { profileBadgeTierToApp } from '../models/supabase';
 import type { User } from '../types';
+import { normalizeUserMood } from '../userMoods';
 
 const PLACEHOLDER_AVATAR = 'https://picsum.photos/seed/zongo-profile/400/400';
 
@@ -34,5 +35,6 @@ export function profileRowToPublicUser(row: ProfileRowPartial, maxDistanceMiles 
     voiceName: row.voice_name?.trim() || undefined,
     badgeTier: profileBadgeTierToApp(row.badge_tier) ?? 'none',
     gender: row.gender ?? undefined,
+    mood: normalizeUserMood(row.mood),
   };
 }

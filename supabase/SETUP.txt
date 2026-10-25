@@ -84,8 +84,11 @@ Production
    npx supabase functions deploy create-stripe-checkout
    npx supabase functions deploy stripe-webhook
    npx supabase functions deploy revenuecat-webhook
+   npx supabase functions deploy create-paystack-checkout
+   npx supabase functions deploy paystack-webhook
    npx supabase functions deploy admin-review-cashout
    npx supabase functions deploy admin-approve-ad
+   npx supabase functions deploy admin-broadcast-notification
    npx supabase functions deploy admin-manage-roles
    npx supabase functions deploy wallet-action
    npx supabase functions deploy monitoring-ingest
@@ -108,12 +111,29 @@ Production
    REVENUECAT_WEBHOOK_AUTHORIZATION  (exact shared secret you configure in RevenueCat webhook Authorization)
    REVENUECAT_PRODUCT_TOKEN_MAP      (JSON: store product_id → integer tokens, consumable SKUs only)
 
+   Paystack (web card + mobile money → wallet credit):
+   PAYSTACK_SECRET_KEY     (sk_test_... / sk_live_... from Paystack Dashboard → Settings → API Keys & Webhooks;
+                            also used to verify the x-paystack-signature header on webhooks)
+   CHECKOUT_APP_BASE_URL   (shared with Stripe; Paystack returns users to /?checkout=success)
+   Admin → Token Packages: set a Paystack price + currency per package (GHS or KES for mobile money).
+   Frontend: VITE_PAYMENT_WEB_METHODS=paystack_mobile_money,paystack_card,stripe_card
+   Paystack is web-only: App Store / Play rules require store billing for tokens inside the mobile apps.
+
    Avoid double-credits: if Stripe is also connected inside RevenueCat for the same web purchases,
    disable either stripe-webhook or the RevenueCat path for those events so only one rail calls wallet_apply_delta.
 
 7. Stripe: add endpoint URL https://<project-ref>.supabase.co/functions/v1/stripe-webhook (raw body).
    RevenueCat: point webhooks to https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
-   Use the Supabase function JWT bypass already set in config.toml (verify_jwt = false for these two).
+   Paystack: Settings → API Keys & Webhooks → Webhook URL https://<project-ref>.supabase.co/functions/v1/paystack-webhook
+   Use the Supabase function JWT bypass already set in config.toml (verify_jwt = false for these webhooks).
+
+   Mobile app (Capacitor + App Store / Play):
+   - npm run cap:sync after each web build you ship to stores
+   - npm run cap:open:android / cap:open:ios to open native projects
+   - .env.local: VITE_REVENUECAT_IOS_API_KEY and VITE_REVENUECAT_GOOGLE_API_KEY (RevenueCat → Project → API keys)
+   - Admin → Token Packages: set Store product id (RevenueCat) per package; same SKU in App Store Connect + Play Console
+   - RevenueCat dashboard: create consumable products, default offering, webhook to revenuecat-webhook
+   - Purchases.logIn uses Supabase user id so wallet credits match the signed-in user
 
 8. Production app gate: the web app runs with import.meta.env.PROD and refuses to load the main
    UI if Supabase env vars are missing. Confirm CI/CD injects VITE_SUPABASE_* for every deploy.

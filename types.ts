@@ -23,6 +23,16 @@ export interface PayoutDetails {
 
 export type UserGender = 'male' | 'female';
 
+/** Shown on Explore tiles/list and profile; user picks in Profile. */
+export type UserMoodId =
+  | 'neutral'
+  | 'happy'
+  | 'flirty'
+  | 'chill'
+  | 'romantic'
+  | 'party'
+  | 'focus';
+
 export interface User {
   id: string;
   name: string;
@@ -46,6 +56,7 @@ export interface User {
   payoutDetails?: PayoutDetails;
   badgeTier?: BadgeTier; // VIP badge - affects explore page ranking
   gender?: UserGender; // For explore filtering (male sees females, female sees males)
+  mood?: UserMoodId; // Status / vibe shown on Explore
 }
 
 /** Predetermined Explore ad run length + token price (set in Monetization; up to 10 tiers). */
@@ -167,6 +178,14 @@ export interface TokenPackage {
   id: string;
   tokens: number;
   price: string;
+  /** Stripe Price id (web checkout). */
+  stripePriceId?: string | null;
+  /** App Store / Play product id (RevenueCat). */
+  revenuecatProductId?: string | null;
+  /** Paystack charge in minor units (e.g. 7500 = GHS 75.00); null = not sold via Paystack. */
+  paystackAmountMinor?: number | null;
+  /** ISO currency Paystack charges in (GHS / KES for mobile money). */
+  paystackCurrency?: string | null;
 }
 
 export interface Gift {

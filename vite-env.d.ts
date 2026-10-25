@@ -12,6 +12,9 @@ interface ImportMetaEnv {
   readonly VITE_SIGNUP_CHALLENGE_ALWAYS?: string;
   readonly VITE_SIGNUP_RISK_ATTEMPTS_THRESHOLD?: string;
   readonly VITE_SIGNUP_RISK_WINDOW_MINUTES?: string;
+  readonly VITE_PAYMENT_WEB_CHANNEL?: string;
+  /** Comma-separated: stripe_card, paystack_card, paystack_mobile_money */
+  readonly VITE_PAYMENT_WEB_METHODS?: string;
 }
 
 interface ImportMeta {

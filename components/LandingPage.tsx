@@ -194,7 +194,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEmailAuth, onAnonymousAuth 
         ))}
         <div
           className="absolute left-0 right-0 z-10 flex justify-center gap-1"
-          style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}
+          style={{ bottom: 'calc(6.5rem + env(safe-area-inset-bottom, 0px))' }}
         >
           {CAROUSEL_IMAGES.map((_, i) => (
             <button

@@ -30,7 +30,8 @@ export const MOCK_USERS: User[] = [
     ],
     earnings: 1250,
     badgeTier: 'gold',
-    gender: 'female'
+    gender: 'female',
+    mood: 'party',
   },
   {
     id: '2',
@@ -48,6 +49,7 @@ export const MOCK_USERS: User[] = [
       'https://picsum.photos/seed/alex2/400/400'
     ],
     badgeTier: 'bronze',
+    mood: 'chill',
     gender: 'male'
   },
   {
@@ -69,7 +71,8 @@ export const MOCK_USERS: User[] = [
     ],
     earnings: 840,
     badgeTier: 'silver',
-    gender: 'female'
+    gender: 'female',
+    mood: 'flirty',
   },
   {
     id: '4',
@@ -87,7 +90,8 @@ export const MOCK_USERS: User[] = [
       'https://picsum.photos/seed/elena2/400/400'
     ],
     badgeTier: 'platinum',
-    gender: 'female'
+    gender: 'female',
+    mood: 'romantic',
   },
   {
     id: '5',
@@ -106,7 +110,8 @@ export const MOCK_USERS: User[] = [
       'https://picsum.photos/seed/marcus3/400/400'
     ],
     badgeTier: 'none',
-    gender: 'male'
+    gender: 'male',
+    mood: 'happy',
   },
   {
     id: '6',
@@ -125,7 +130,8 @@ export const MOCK_USERS: User[] = [
     ],
     earnings: 2100,
     badgeTier: 'diamond',
-    gender: 'female'
+    gender: 'female',
+    mood: 'focus',
   },
   {
     id: '7',

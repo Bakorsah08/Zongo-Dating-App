@@ -1,5 +1,6 @@
 import { profileBadgeTierToApp, type ProfileRowPartial } from '../models/supabase';
 import type { BadgeTier, User, UserGender } from '../types';
+import { normalizeUserMood } from '../userMoods';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { devError } from '../lib/devLog';
 
@@ -32,6 +33,7 @@ function rowToUser(base: User, row: ProfileRowPartial): User {
     style: row.style?.trim() ? row.style : base.style,
     videoUrl: row.video_url?.trim() ? row.video_url : base.videoUrl,
     voiceName: row.voice_name?.trim() ? row.voice_name : base.voiceName,
+    mood: normalizeUserMood(row.mood ?? base.mood),
   };
 }
 
@@ -89,6 +91,7 @@ export async function updateMyProfile(userId: string, updates: Partial<User>): P
   if (updates.style !== undefined) patch.style = updates.style;
   if (updates.videoUrl !== undefined) patch.video_url = updates.videoUrl;
   if (updates.voiceName !== undefined) patch.voice_name = updates.voiceName;
+  if (updates.mood !== undefined) patch.mood = updates.mood;
   if (Object.keys(patch).length === 0) return true;
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
   if (error) {

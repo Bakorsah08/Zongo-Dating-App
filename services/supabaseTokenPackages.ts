@@ -9,12 +9,22 @@ type TokenPackageRow = {
   currency: string;
   stripe_price_id: string | null;
   revenuecat_product_id: string | null;
+  paystack_amount_minor: number | null;
+  paystack_currency: string | null;
   active: boolean;
   sort_order: number;
 };
 
 function rowToTokenPackage(r: TokenPackageRow): TokenPackage {
-  return { id: r.id, tokens: r.tokens, price: r.display_price };
+  return {
+    id: r.id,
+    tokens: r.tokens,
+    price: r.display_price,
+    stripePriceId: r.stripe_price_id,
+    revenuecatProductId: r.revenuecat_product_id,
+    paystackAmountMinor: r.paystack_amount_minor,
+    paystackCurrency: r.paystack_currency,
+  };
 }
 
 export async function fetchActiveTokenPackagesFromDb(): Promise<TokenPackage[]> {
@@ -22,8 +32,21 @@ export async function fetchActiveTokenPackagesFromDb(): Promise<TokenPackage[]> 
   const sb = getSupabase();
   const { data, error } = await sb
     .from('token_packages')
-    .select('id,tokens,display_price,currency,stripe_price_id,revenuecat_product_id,active,sort_order')
+    .select('id,tokens,display_price,currency,stripe_price_id,revenuecat_product_id,paystack_amount_minor,paystack_currency,active,sort_order')
     .eq('active', true)
+    .order('sort_order', { ascending: true })
+    .order('tokens', { ascending: true });
+  if (error) throw error;
+  return (data as TokenPackageRow[]).map(rowToTokenPackage);
+}
+
+/** Admin: all packages including inactive, with payment rail ids. */
+export async function fetchTokenPackagesForAdminFromDb(): Promise<TokenPackage[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('token_packages')
+    .select('id,tokens,display_price,currency,stripe_price_id,revenuecat_product_id,paystack_amount_minor,paystack_currency,active,sort_order')
     .order('sort_order', { ascending: true })
     .order('tokens', { ascending: true });
   if (error) throw error;
@@ -37,6 +60,8 @@ export type AdminTokenPackageInput = {
   currency?: string;
   stripe_price_id?: string | null;
   revenuecat_product_id?: string | null;
+  paystack_amount_minor?: number | null;
+  paystack_currency?: string | null;
   active?: boolean;
   sort_order?: number;
 };
@@ -51,6 +76,8 @@ export async function adminUpsertTokenPackageDb(input: AdminTokenPackageInput): 
     currency: input.currency ?? 'USD',
     stripe_price_id: input.stripe_price_id ?? null,
     revenuecat_product_id: input.revenuecat_product_id ?? null,
+    paystack_amount_minor: input.paystack_amount_minor ?? null,
+    paystack_currency: input.paystack_currency?.trim().toUpperCase() || 'GHS',
     active: input.active ?? true,
     sort_order: input.sort_order ?? 0,
   };

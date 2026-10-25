@@ -1,4 +1,4 @@
-type FailureDomain = 'auth' | 'rpc' | 'realtime' | 'storage';
+type FailureDomain = 'auth' | 'rpc' | 'realtime' | 'storage' | 'ai' | 'media';
 
 type FailureEvent = {
   kind: 'failure';

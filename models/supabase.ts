@@ -45,6 +45,8 @@ export type ProfileRow = {
   style: string;
   video_url: string;
   voice_name: string;
+  /** Explore mood preset (app: UserMoodId). */
+  mood?: string;
   created_at: string;
   updated_at: string;
 };

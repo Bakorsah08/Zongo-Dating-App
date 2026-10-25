@@ -13,6 +13,7 @@ const navItems: { path: string; label: string; icon: string; permission: Permiss
   { path: '/admin/monetization', label: 'Monetization', icon: '💰', permission: 'manage_monetization' },
   { path: '/admin/payout', label: 'Payout', icon: '🏦', permission: 'manage_monetization' },
   { path: '/admin/users', label: 'Users', icon: '👥', permission: 'manage_users' },
+  { path: '/admin/reports', label: 'Reports', icon: '🚩', permission: 'review_reports' },
   { path: '/admin/badges', label: 'Badges', icon: '🏅', permission: 'manage_badges' },
   { path: '/admin/tokens', label: 'Token Packages', icon: '💎', permission: 'manage_tokens' },
   { path: '/admin/gifts', label: 'Gifts', icon: '🎁', permission: 'manage_gifts' },

@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.admin-approve-ad]
 verify_jwt = true
 
+[functions.admin-broadcast-notification]
+verify_jwt = true
+
 [functions.payments-webhook]
 verify_jwt = false
 
@@ -24,6 +27,18 @@ verify_jwt = false
 
 [functions.revenuecat-webhook]
 verify_jwt = false
+
+[functions.create-paystack-checkout]
+verify_jwt = true
+
+[functions.paystack-webhook]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.admin-review-reports]
+verify_jwt = true
 
 [functions.monitoring-ingest]
 verify_jwt = false

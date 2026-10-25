@@ -11,6 +11,7 @@ import AdminDashboard from './admin/AdminDashboard';
 import MonetizationPage from './admin/MonetizationPage';
 import PayoutPage from './admin/PayoutPage';
 import UsersPage from './admin/UsersPage';
+import ReportsPage from './admin/ReportsPage';
 import BadgesPage from './admin/BadgesPage';
 import TokensPage from './admin/TokensPage';
 import GiftsPage from './admin/GiftsPage';
@@ -92,6 +93,14 @@ root.render(
                 element={
                   <ProtectedRoute requiredPermission="manage_users">
                     <UsersPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="reports"
+                element={
+                  <ProtectedRoute requiredPermission="review_reports">
+                    <ReportsPage />
                   </ProtectedRoute>
                 }
               />

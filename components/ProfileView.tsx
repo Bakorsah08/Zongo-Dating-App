@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { User, BadgeTier, PayoutDetails, UserAdSubmission } from '../types';
+import { USER_MOOD_OPTIONS } from '../userMoods';
 import { getBadges, getMonetizationSettings } from '../data';
 import ProfileSettingsSheets, { type ProfileSettingsSheetId } from './ProfileSettingsSheets';
 
@@ -32,6 +33,8 @@ interface ProfileViewProps {
   }) => { success: boolean; error?: string } | Promise<{ success: boolean; error?: string }>;
   userAdSubmissions?: UserAdSubmission[];
   onUnblockUser?: (userId: string) => void;
+  /** Permanently deletes the signed-in account; resolves with an error message on failure. */
+  onDeleteAccount?: () => Promise<string | void>;
 }
 
 const MAX_PHOTOS = 8;
@@ -54,6 +57,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onSubmitUserAd,
   userAdSubmissions = [],
   onUnblockUser,
+  onDeleteAccount,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -350,6 +354,35 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           )}
         </div>
       </div>
+
+      <section className="mb-[0.8rem]">
+        <div className="mb-3 px-1">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Mood</h4>
+          <p className="mt-0.5 text-[10px] text-zinc-500">Shown on Explore with your VIP badge</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {USER_MOOD_OPTIONS.map((m) => {
+            const selected = (user.mood ?? 'neutral') === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onUpdateProfile({ mood: m.id })}
+                className={`flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-xs font-bold transition-all active:scale-[0.98] ${
+                  selected
+                    ? 'border-pink-500 bg-pink-50 text-pink-800 shadow-sm ring-2 ring-pink-200'
+                    : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
+                }`}
+              >
+                <span className="text-base leading-none" aria-hidden>
+                  {m.icon}
+                </span>
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="mb-[0.8rem]">
         <div className="mb-3 flex items-center justify-between px-1">
@@ -1046,6 +1079,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           onNavigateToExploreFilters={() => onNavigateToExploreFilters?.()}
           onPreferencesChanged={() => onPreferencesChanged?.()}
           onUnblockUser={onUnblockUser}
+          onDeleteAccount={onDeleteAccount}
+          tokenBalance={tokens}
         />
       ) : null}
     </div>

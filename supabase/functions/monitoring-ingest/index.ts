@@ -49,8 +49,8 @@ function sanitizeDetails(input: unknown): Record<string, unknown> {
   return out;
 }
 
-function allowedDomain(v: unknown): v is 'auth' | 'rpc' | 'realtime' | 'storage' {
-  return v === 'auth' || v === 'rpc' || v === 'realtime' || v === 'storage';
+function allowedDomain(v: unknown): v is 'auth' | 'rpc' | 'realtime' | 'storage' | 'ai' | 'media' {
+  return v === 'auth' || v === 'rpc' || v === 'realtime' || v === 'storage' || v === 'ai' || v === 'media';
 }
 
 function getIp(req: Request): string | null {

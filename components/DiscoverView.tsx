@@ -9,11 +9,17 @@ import {
   USER_PREFERENCES_UPDATED_EVENT,
   type DiscoveryTextFilter,
 } from '../userPreferencesStore';
+import { getUserMoodDisplay } from '../userMoods';
 
 interface DiscoverViewProps {
   userGender?: UserGender;
   /** Logged-in user id (hide self from grid). Defaults to legacy mock id `me`. */
   currentUserId?: string;
+  /** Header: avatar, name, token balance, buy button. */
+  currentUser?: Pick<User, 'name' | 'avatar'>;
+  tokens?: number;
+  onGoShop?: () => void;
+  onOpenProfile?: () => void;
   onSelectUser: (user: User) => void;
   onSelectLive: (user: User) => void;
   onGoLive?: () => void;
@@ -43,7 +49,9 @@ const getBadgeRank = (user: User): number => {
 const ExploreCarouselTile: React.FC<{
   cloudCarouselAds?: ExploreCarouselAd[];
   useRemoteCarousel?: boolean;
-}> = ({ cloudCarouselAds = [], useRemoteCarousel = false }) => {
+  /** Wide banner when list layout; default portrait tile for grid. */
+  layout?: 'grid' | 'list';
+}> = ({ cloudCarouselAds = [], useRemoteCarousel = false, layout = 'grid' }) => {
   const localAds = getExploreCarousel().ads;
   const ads =
     useRemoteCarousel && cloudCarouselAds.length > 0 ? cloudCarouselAds : localAds;
@@ -77,9 +85,17 @@ const ExploreCarouselTile: React.FC<{
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const frameClass =
+    layout === 'list'
+      ? 'relative aspect-[2/1] max-h-44 w-full sm:max-h-52'
+      : 'relative aspect-[3/4]';
+  const frameBorder = layout === 'list' ? 'border border-zinc-200' : 'border border-white';
+
   if (!current) {
     return (
-      <div className="group relative aspect-[3/4] overflow-hidden rounded-[0.65rem] border border-white transition-transform active:scale-[0.99] cursor-default">
+      <div
+        className={`group ${frameClass} overflow-hidden rounded-[0.65rem] ${frameBorder} transition-transform active:scale-[0.99] cursor-default`}
+      >
         <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-violet-600 to-blue-600" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
         <div className="absolute left-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter text-zinc-900 shadow-sm">
@@ -111,7 +127,7 @@ const ExploreCarouselTile: React.FC<{
           openLink();
         }
       }}
-      className={`group relative aspect-[3/4] overflow-hidden rounded-[0.65rem] border border-white transition-transform active:scale-[0.99] ${
+      className={`group ${frameClass} overflow-hidden rounded-[0.65rem] ${frameBorder} transition-transform active:scale-[0.99] ${
         link ? 'cursor-pointer' : 'cursor-default'
       }`}
     >
@@ -166,9 +182,67 @@ function distanceLine(
   return 'Farther away';
 }
 
+/** Resolve tier icon/label even if admin badge list was customized. */
+function vipTierDisplay(user: User): { icon: string; name: string } | null {
+  if (!user.badgeTier || user.badgeTier === 'none') return null;
+  const info = getBadges().find((b) => b.id === user.badgeTier);
+  return {
+    icon: info?.icon?.trim() ? info.icon : '👑',
+    name: info?.name?.trim() ? info.name : 'VIP',
+  };
+}
+
+/** Large VIP mark — top-right on grid tiles. */
+function ExploreTileVipCorner({ user }: { user: User }) {
+  const vip = vipTierDisplay(user);
+  if (!vip) return null;
+  return (
+    <div
+      className="absolute right-2 top-2 z-20 flex flex-col items-end gap-0.5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.75)]"
+      title={vip.name}
+    >
+      <span className="text-[1.65rem] leading-none" aria-hidden>
+        {vip.icon}
+      </span>
+      <span className="rounded-full bg-amber-500 px-1.5 py-px text-[7px] font-black uppercase tracking-wider text-white ring-1 ring-white/40">
+        VIP
+      </span>
+    </div>
+  );
+}
+
+/** Mood + VIP chips on Explore portrait tiles (dark overlay). */
+function ExploreTileVipMoodChips({ user }: { user: User }) {
+  const mood = getUserMoodDisplay(user.mood);
+  const vip = vipTierDisplay(user);
+  return (
+    <div className="mb-1.5 flex flex-wrap gap-1">
+      <span className="inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm backdrop-blur-sm">
+        <span aria-hidden>{mood.icon}</span>
+        {mood.label}
+      </span>
+      {vip ? (
+        <span
+          className="inline-flex items-center gap-0.5 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow-md ring-1 ring-amber-200/80"
+          title={vip.name}
+        >
+          <span aria-hidden className="text-[11px] leading-none">
+            {vip.icon}
+          </span>
+          VIP
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 const DiscoverView: React.FC<DiscoverViewProps> = ({
   userGender,
   currentUserId = 'me',
+  currentUser,
+  tokens = 0,
+  onGoShop,
+  onOpenProfile,
   onSelectUser,
   onSelectLive,
   onGoLive,
@@ -202,6 +276,22 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
   const [approximateDistance, setApproximateDistance] = useState(
     () => getPrivacyPreferences().showApproximateDistanceOnly
   );
+
+  const [layoutMode, setLayoutMode] = useState<'grid' | 'list'>(() => {
+    try {
+      return localStorage.getItem('zongo_explore_layout') === 'list' ? 'list' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zongo_explore_layout', layoutMode);
+    } catch {
+      /* ignore */
+    }
+  }, [layoutMode]);
 
   const lastFilterSignal = useRef(exploreFilterOpenSignal);
   useEffect(() => {
@@ -335,41 +425,132 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
   const areAnyFiltersActive = (profileType === 'human' && areHumanFiltersActive) || (profileType === 'ai' && areAIFiltersActive);
   return (
     <div className="flex flex-col min-h-full bg-white">
-      {/* pr reserves space for the global notification bell (top-right) so the filter control stays tappable */}
-      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4 pr-[4.25rem]">
-        <h1 className="min-w-0 flex-1 text-2xl font-black tracking-tight text-black">Explore Your World</h1>
-        <button
-          type="button"
-          onClick={() => setShowFilters(!showFilters)}
-          aria-expanded={showFilters}
-          aria-label="Open filters"
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all ${
-            showFilters || areAnyFiltersActive ? 'bg-white text-pink-600' : 'bg-white text-zinc-700'
-          }`}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
+      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            disabled={!onOpenProfile}
+            className={`relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-pink-200 ${
+              onOpenProfile ? 'cursor-pointer active:scale-95' : 'cursor-default'
+            }`}
+            aria-label={currentUser?.name ? `${currentUser.name}, open profile` : 'Your profile'}
           >
-            <line x1="4" y1="21" x2="4" y2="14" />
-            <line x1="4" y1="10" x2="4" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12" y2="3" />
-            <line x1="20" y1="21" x2="20" y2="16" />
-            <line x1="20" y1="12" x2="20" y2="3" />
-            <line x1="1" y1="14" x2="7" y2="14" />
-            <line x1="9" y1="8" x2="15" y2="8" />
-            <line x1="17" y1="16" x2="23" y2="16" />
-          </svg>
-        </button>
+            <img
+              src={currentUser?.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          </button>
+          <span className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-zinc-800">
+            <span aria-hidden>💎</span>
+            {tokens.toLocaleString()}
+          </span>
+          {onGoShop ? (
+            <button
+              type="button"
+              onClick={onGoShop}
+              aria-label="Buy more tokens"
+              className="flex h-[1.4rem] w-[1.4rem] shrink-0 items-center justify-center rounded-full bg-pink-600 text-sm font-bold leading-none text-white shadow-sm transition-all active:scale-95 hover:bg-pink-500"
+            >
+              +
+            </button>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setLayoutMode('grid')}
+            aria-pressed={layoutMode === 'grid'}
+            aria-label="Tile grid view"
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+              layoutMode === 'grid'
+                ? 'bg-pink-100 text-pink-600'
+                : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700'
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLayoutMode('list')}
+            aria-pressed={layoutMode === 'list'}
+            aria-label="List view"
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+              layoutMode === 'list'
+                ? 'bg-pink-100 text-pink-600'
+                : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700'
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowFilters(!showFilters)}
+            aria-expanded={showFilters}
+            aria-label="Open filters"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all ${
+              showFilters || areAnyFiltersActive ? 'bg-white text-pink-600 ring-1 ring-pink-200' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center gap-2 overflow-x-auto px-4 pb-3">
@@ -509,86 +690,196 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({
         </div>
       )}
 
-      <div className="grid w-full grid-cols-2 gap-[0.225rem] px-[0.15rem] pb-24 sm:gap-[0.3rem] sm:px-[0.3rem]">
-        <ExploreCarouselTile cloudCarouselAds={cloudCarouselAds} useRemoteCarousel={useRemoteCarousel} />
-        {cloudDiscoverError ? (
-          <div className="col-span-2 flex flex-col items-center justify-center gap-2 rounded-[0.65rem] border border-dashed border-red-200 bg-red-50/80 px-3 py-6 text-center">
-            <p className="text-sm font-semibold text-red-800">{cloudDiscoverError}</p>
-            {onReloadCloudDiscover ? (
-              <button
-                type="button"
-                onClick={onReloadCloudDiscover}
-                className="rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white"
+      {layoutMode === 'grid' ? (
+        <div className="grid w-full grid-cols-2 gap-[0.225rem] px-[0.15rem] pb-24 sm:gap-[0.3rem] sm:px-[0.3rem]">
+          <ExploreCarouselTile cloudCarouselAds={cloudCarouselAds} useRemoteCarousel={useRemoteCarousel} />
+          {cloudDiscoverError ? (
+            <div className="col-span-2 flex flex-col items-center justify-center gap-2 rounded-[0.65rem] border border-dashed border-red-200 bg-red-50/80 px-3 py-6 text-center">
+              <p className="text-sm font-semibold text-red-800">{cloudDiscoverError}</p>
+              {onReloadCloudDiscover ? (
+                <button
+                  type="button"
+                  onClick={onReloadCloudDiscover}
+                  className="rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white"
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {cloudDiscoverLoading && !cloudDiscoverError ? (
+            <div className="col-span-2 flex aspect-[3/4] max-h-40 items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 text-sm text-zinc-500">
+              Loading people…
+            </div>
+          ) : null}
+          {!cloudDiscoverLoading && filteredUsers.length > 0 ? (
+            filteredUsers.map((user) => (
+              <div
+                key={user.id}
+                onClick={() => (user.isLive && liveStreamingEnabled ? onSelectLive(user) : onSelectUser(user))}
+                className="group relative aspect-[3/4] cursor-pointer overflow-hidden rounded-[0.65rem] border border-white transition-transform active:scale-[0.99]"
               >
-                Retry
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {cloudDiscoverLoading && !cloudDiscoverError ? (
-          <div className="col-span-2 flex aspect-[3/4] max-h-40 items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 text-sm text-zinc-500">
-            Loading people…
-          </div>
-        ) : null}
-        {!cloudDiscoverLoading && filteredUsers.length > 0 ? (
-          filteredUsers.map((user) => (
-            <div 
-              key={user.id}
-              onClick={() => (user.isLive && liveStreamingEnabled) ? onSelectLive(user) : onSelectUser(user)}
-              className="relative aspect-[3/4] cursor-pointer overflow-hidden rounded-[0.65rem] border border-white transition-transform group active:scale-[0.99]"
-            >
-              <img 
-                src={user.avatar} 
-                alt={user.name} 
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-              
-              {user.isAI && (
-                 <div className="absolute top-2 left-2 flex items-center gap-1 bg-pink-600/80 backdrop-blur-md px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter text-white shadow-lg border border-white/20">
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+
+                {user.isAI && (
+                  <div className="absolute left-2 top-2 z-20 flex items-center gap-1 rounded border border-white/20 bg-pink-600/80 px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter text-white shadow-lg backdrop-blur-md">
                     <span className="text-[10px]">🤖</span> AI
                   </div>
-              )}
-              {user.isLive && (
-                <div className="absolute top-2 left-2 flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-red-600 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter text-white shadow-lg animate-pulse">
-                    <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
-                    LIVE
-                  </div>
-                  {user.viewerCount && (
-                     <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-md text-[10px] font-bold text-white shadow-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        <span>{user.viewerCount.toLocaleString()}</span>
+                )}
+                {user.isLive && (
+                  <div className="absolute left-2 top-2 z-20 flex items-center gap-2">
+                    <div className="flex animate-pulse items-center gap-1.5 rounded-md bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-tighter text-white shadow-lg">
+                      <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                      LIVE
                     </div>
-                  )}
-                </div>
-              )}
+                    {user.viewerCount ? (
+                      <div className="flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1 text-[10px] font-bold text-white shadow-lg backdrop-blur-sm">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        <span>{user.viewerCount.toLocaleString()}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
-              {user.badgeTier && user.badgeTier !== 'none' && (
-                <div className="absolute top-2 right-2 text-[22px] drop-shadow-md" title={getBadges().find(b => b.id === user.badgeTier)?.name}>
-                  {getBadges().find(b => b.id === user.badgeTier)?.icon}
-                </div>
-              )}
+                <ExploreTileVipCorner user={user} />
 
-              <div className="absolute bottom-3 left-3 right-3">
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">{user.name}, {user.age}</h3>
-                  {user.isOnline && !user.isLive && !user.isAI && <span className="w-3 h-3 bg-green-500 rounded-full"></span>}
+                <div className="absolute bottom-3 left-3 right-3 z-10">
+                  <ExploreTileVipMoodChips user={user} />
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-[0.91875rem] font-bold text-white drop-shadow-md">
+                      {user.name}, {user.age}
+                    </h3>
+                    {user.isOnline && !user.isLive && !user.isAI ? (
+                      <span className="h-3 w-3 rounded-full bg-green-500" />
+                    ) : null}
+                  </div>
+                  <p className="truncate text-[10px] text-zinc-300 drop-shadow-md">
+                    {distanceLine(user, approximateDistance)}
+                  </p>
                 </div>
-                <p className="text-[10px] text-zinc-300 truncate drop-shadow-md">
-                  {distanceLine(user, approximateDistance)}
-                </p>
               </div>
+            ))
+          ) : !cloudDiscoverLoading ? (
+            <div className="col-span-2 flex aspect-[3/4] flex-col items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 px-3 text-center">
+              <span className="text-3xl grayscale opacity-50">🔍</span>
+              <h3 className="mt-2 text-sm font-bold text-zinc-600">No results</h3>
+              <p className="mt-1 text-[10px] text-zinc-500">Try adjusting filters</p>
             </div>
-          ))
-        ) : !cloudDiscoverLoading ? (
-          <div className="flex aspect-[3/4] flex-col items-center justify-center rounded-[0.65rem] border border-dashed border-zinc-200 bg-zinc-50 px-3 text-center">
-            <span className="text-3xl grayscale opacity-50">🔍</span>
-            <h3 className="mt-2 text-sm font-bold text-zinc-600">No results</h3>
-            <p className="mt-1 text-[10px] text-zinc-500">Try adjusting filters</p>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 px-3 pb-24 sm:px-4">
+          <ExploreCarouselTile
+            cloudCarouselAds={cloudCarouselAds}
+            useRemoteCarousel={useRemoteCarousel}
+            layout="list"
+          />
+          {cloudDiscoverError ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-red-200 bg-red-50/80 px-3 py-6 text-center">
+              <p className="text-sm font-semibold text-red-800">{cloudDiscoverError}</p>
+              {onReloadCloudDiscover ? (
+                <button
+                  type="button"
+                  onClick={onReloadCloudDiscover}
+                  className="rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white"
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {cloudDiscoverLoading && !cloudDiscoverError ? (
+            <div className="flex min-h-[7rem] items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50 text-sm text-zinc-500">
+              Loading people…
+            </div>
+          ) : null}
+          {!cloudDiscoverLoading && filteredUsers.length > 0
+            ? filteredUsers.map((user) => {
+                const mood = getUserMoodDisplay(user.mood);
+                const vip = vipTierDisplay(user);
+                return (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => (user.isLive && liveStreamingEnabled ? onSelectLive(user) : onSelectUser(user))}
+                  className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2 text-left shadow-sm transition-transform active:scale-[0.99]"
+                >
+                  <img
+                    src={user.avatar}
+                    alt=""
+                    className="h-[4.25rem] w-[4.25rem] shrink-0 rounded-lg object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-bold text-zinc-900">
+                        {user.name}, {user.age}
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-800">
+                        <span aria-hidden>{mood.icon}</span>
+                        {mood.label}
+                      </span>
+                      {vip ? (
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-black uppercase text-amber-950"
+                          title={vip.name}
+                        >
+                          <span aria-hidden className="text-sm leading-none">
+                            {vip.icon}
+                          </span>
+                          VIP
+                        </span>
+                      ) : null}
+                      {user.isAI ? (
+                        <span className="rounded bg-pink-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-pink-700">
+                          AI
+                        </span>
+                      ) : null}
+                      {user.isLive ? (
+                        <span className="flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-white">
+                          <span className="h-1 w-1 rounded-full bg-white" />
+                          Live
+                        </span>
+                      ) : null}
+                      {user.isOnline && !user.isLive && !user.isAI ? (
+                        <span className="h-2 w-2 rounded-full bg-green-500" title="Online" />
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                      {distanceLine(user, approximateDistance)}
+                      {user.isLive && user.viewerCount ? ` · ${user.viewerCount.toLocaleString()} watching` : ''}
+                    </p>
+                  </div>
+                </button>
+              );
+              })
+            : !cloudDiscoverLoading ? (
+                <div className="flex min-h-[10rem] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-3 text-center">
+                  <span className="text-3xl grayscale opacity-50">🔍</span>
+                  <h3 className="mt-2 text-sm font-bold text-zinc-600">No results</h3>
+                  <p className="mt-1 text-[10px] text-zinc-500">Try adjusting filters</p>
+                </div>
+              ) : null}
+        </div>
+      )}
 
     </div>
   );
